@@ -1,5 +1,7 @@
 # yolact_RK3588
 
+doesn't work yet, I need to add a postprocess
+
 ## Install
 Install miniconda
 ```
