@@ -1,11 +1,9 @@
-from multiprocessing import Queue
 import json
 from pathlib import Path
 import cv2
 import numpy as np
 
 from base.utils import format_dets
-from .maps import resnet_map, autoen_map
 
 CONFIG_FILE = str(Path(__file__).parent.parent.parent.absolute()) + "/config.json"
 with open(CONFIG_FILE, 'r') as config_file:
@@ -15,6 +13,8 @@ with open(CONFIG_FILE, 'r') as config_file:
 class PostProcesses():
     pass
 
+class Visualizer():
+    pass
 
 def post_yolov5(outputs, frame):
     """Overlays bboxes on frames
