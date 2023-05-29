@@ -30,7 +30,7 @@ class RKNNModelLoader():
     """
     """
     
-    def __init__(self, model_list, cores:list):
+    def __init__(self):
         self.verbose = False
         self.verbose_file = 'verbose.txt'
         self.async_mode = False
