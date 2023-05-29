@@ -19,6 +19,13 @@ class RKNNModelNames():
         return path_list
 
 
+def get_model_path(model_name):
+    try:
+        return MODELS_PATH+model_name
+    except IndexError:
+        return None
+
+
 class RKNNModelLoader():
     """
     """
@@ -26,52 +33,19 @@ class RKNNModelLoader():
     def __init__(self, model_list, cores:list):
         self.verbose = False
         self.verbose_file = 'verbose.txt'
-        self.rknn_name_list = RKNNModelNames().get_model_names(model_list)
-        self._rknn_auto = self.rknn_name_list[0]
-        if len(model_list) > 1:
-            self.async_mode = True
-        else:
-            self.async_mode = False
-        self._cores = cores
-        self._core_auto = self._cores[0]
-        self.rknn_list = self.load_rknn_models()
-
-    def get_core(self):
-        try:
-            return self._cores.pop(0)
-        except IndexError:
-            return self._core_auto
-
-    def get_model_path(self):
-        try:
-            return MODELS_PATH+self.rknn_name_list.pop(0)
-        except IndexError:
-            return self._rknn_auto
-
-    def load_rknn_models(self):
-        rknn_lite_list = []
-        for i in range(len(self.rknn_name_list)):
-            try:
-                print(f'Init model - {i}')
-                rknn_lite_list.append(self.get_rknn_model())
-            except Exception as e:
-                print("Cannot load rknn model. Exception {}".format(e))
-                raise SystemExit
-        return rknn_lite_list
+        self.async_mode = False
     
-    def get_rknn_model(self):
-        core = self.get_core()
-        model = self.get_model_path()
-        rknnlite = RKNNLite(verbose=self.verbose,
-                            verbose_file=self.verbose_file
-                            )
+    @staticmethod
+    def load_rknn_model(core, model):
+        model = get_model_path(model)
+        rknnlite = RKNNLite()
         print(f"Export rknn model - {model}")
         ret = rknnlite.load_rknn(model)
         if ret != 0:
             print(f'Export {model} model failed!')
             return ret
         print('Init runtime environment')
-        ret = rknnlite.init_runtime(async_mode=self.async_mode,
+        ret = rknnlite.init_runtime(async_mode=False,
                                     core_mask = core
                                     )
         if ret != 0:
@@ -81,29 +55,12 @@ class RKNNModelLoader():
         return rknnlite
 
 
-class ModelBuilder():
-    
-    def __init__(self, rknn_models, q_input):
-        self._rknn_list = rknn_models
-        self.net_list = self.build_models(q_input)
-    
-    def build_models(self, q_input, q_output):
-        nets = []
-        for rknn_model in self._rknn_list:
-            q_output = Queue(maxsize=3)
-            net = self.new('BaseModel', rknn_model, q_input, q_output)
-            nets.append(net)
-        return nets
-    
-    def new(self, model_name, rknn_model, q_input, q_output):
-        return globals().get(model_name)(rknn_model, q_input, q_output)
-
-
 class Inference(Process):
-        def __init__(self, input, output):
+        def __init__(self, input, output, rknnlite):
             super().__init__(group=None, target=None, name=None, args=(), kwargs={}, daemon=True)
             self.input = input
             self.output = output
+            self._rknnlite = rknnlite
         
         def run(self):
             while True:
@@ -115,10 +72,18 @@ class Inference(Process):
                 self.output.put(np.array(outputs))
 
 
-class BaseModel():
+class YolAct():
     """
     """
     
-    def __init__(self, rknn_model, q_input, q_output):
-        self._rknnlite = rknn_model
-        self.inference = Inference(q_input, q_output)
+    def __init__(self, cores,  q_input):
+        self._cores = cores
+        self.queue = q_input
+        self.rknn_model = RKNNModelNames().get_model_names(['YOLACT'])
+    
+    def load_weights(self):
+        self._rknnlite = RKNNModelLoader.load_rknn_model(self._cores, self.rknn_model)
+    
+    def net_init(self):
+        self.load_weights()
+        self.inference = Inference(self.queue, Queue(maxsize=3), self._rknnlite)

@@ -1,6 +1,6 @@
 from rknnlite.api import RKNNLite
 
-from rknn_models import RKNNModelLoader, YolAct
+from rknn_models import YolAct
 
 
 class NeuroModule():
