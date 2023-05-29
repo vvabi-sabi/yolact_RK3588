@@ -8,8 +8,8 @@ class NeuroModule():
     _PROCESSES_NUMBER = 3
 
     def __init__(self, cores_list, q_input):
-        self.model = YolAct(cores_list)
-        self.net = self.model.net_init(q_input)
+        self.model = YolAct(cores_list, q_input)
+        self.net = self.model.net_init()
 
     def forward(self):
         return self.net.inference.output.get()
