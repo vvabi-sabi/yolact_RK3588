@@ -9,7 +9,7 @@ class NeuroModule():
 
     def __init__(self, cores_list, q_input):
         self.model = YolAct(cores_list)
-        self.nets = self.model.net_init(q_input)
+        self.net = self.model.net_init(q_input)
 
     def forward(self):
         return self.net.inference.output.get()
