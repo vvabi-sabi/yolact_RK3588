@@ -48,7 +48,9 @@ class RK3588():
     _CORES = [RKNNLite.NPU_CORE_0,
               RKNNLite.NPU_CORE_1,
               RKNNLite.NPU_CORE_2,
-              RKNNLite.NPU_CORE_AUTO
+              RKNNLite.NPU_CORE_AUTO,
+              RKNNLite.NPU_CORE_0_1,
+              RKNNLite.NPU_CORE_0_1_2
               ]
 
     def __init__(self, camera, models_list):
