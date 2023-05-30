@@ -7,17 +7,13 @@ ROOT = Path(__file__).parent.parent.parent.absolute()
 MODELS_PATH = str(ROOT) + "/models/"
 
 
-class RKNNModelNames():
-    NAMES_DICT = {'YOLACT':'yolact.rknn',
-                  }
-    
-    #@classmethod
-    def get_model_names(self, model_list):
-        path_list = []
-        for model in model_list:
-            path_list.append(self.NAMES_DICT.get(model))
-        return path_list
+RKNNModelNames = {'YOLACT':'yolact.rknn'}
 
+def get_model_names(model_list):
+    path_list = []
+    for model in model_list:
+        path_list.append(RKNNModelNames.get(model))
+    return path_list
 
 def get_model_path(model_name):
     return MODELS_PATH+model_name
@@ -54,34 +50,23 @@ class RKNNModelLoader():
 
 
 class Inference(Process):
-        def __init__(self, input, output, rknnlite):
+        def __init__(self, input, rknnlite):
             super().__init__(group=None, target=None, name=None, args=(), kwargs={}, daemon=True)
             self.input = input
-            self.output = output
+            self.q_out = Queue(maxsize=3)
             self._rknnlite = rknnlite
         
         def run(self):
             while True:
-                frame_list = self.input.get()
-                outputs = []
-                for frame in frame_list:
-                    vector = self._rknnlite.inference(inputs=[frame])
-                    outputs.append(vector)
-                self.output.put(np.array(outputs))
+                frame = self.input.get()
+                self.q_out.put(self._rknnlite.inference(inputs=[frame]))
 
 
 class YolAct():
     """
     """
     
-    def __init__(self, cores,  q_input):
-        self._cores = cores
-        self.queue = q_input
-        self.rknn_model = RKNNModelNames().get_model_names(['YOLACT'])
-    
-    def load_weights(self):
-        self._rknnlite = RKNNModelLoader.load_rknn_model(self._cores, self.rknn_model)
-    
-    def net_init(self):
-        self.load_weights()
-        self.inference = Inference(self.queue, Queue(maxsize=3), self._rknnlite)
+    def __init__(self, cores, q_input):
+        self._model_name = RKNNModelNames.get_model_names(['YOLACT'])
+        self._rknnlite = RKNNModelLoader.load_rknn_model(cores, self._model_name)
+        self.inference = Inference(q_input, self._rknnlite)
