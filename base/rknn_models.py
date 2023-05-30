@@ -50,16 +50,17 @@ class RKNNModelLoader():
 
 
 class Inference(Process):
-        def __init__(self, input, rknnlite):
-            super().__init__(group=None, target=None, name=None, args=(), kwargs={}, daemon=True)
-            self.input = input
-            self.q_out = Queue(maxsize=3)
-            self._rknnlite = rknnlite
-        
-        def run(self):
-            while True:
-                frame = self.input.get()
-                self.q_out.put(self._rknnlite.inference(inputs=[frame]))
+    
+    def __init__(self, input, rknnlite):
+        super().__init__(group=None, target=None, name=None, args=(), kwargs={}, daemon=True)
+        self.input = input
+        self.q_out = Queue(maxsize=3)
+        self._rknnlite = rknnlite
+    
+    def run(self):
+        while True:
+            frame = self.input.get()
+            self.q_out.put(self._rknnlite.inference(inputs=[frame]))
 
 
 class YolAct():

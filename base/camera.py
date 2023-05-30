@@ -1,24 +1,14 @@
 import cv2
+from multiprocessing import Process
 
-import pre_processes
 
-class Camera():
+class Camera(Process):
     """
     """
-    def __init__(self, source: int, queue, model_list: list):
+    def __init__(self, source: int, queue):
+        super().__init__(group=None, target=None, name=None, args=(), kwargs={}, daemon=True)
         self._queue = queue
         self.source = source
-        self.model_list = model_list
-        self._count = 0
-        self._begin = 0
-
-    def _bgr2rgb(self, frame):
-        frame = cv2.cvtColor(frame.copy(), cv2.COLOR_BGR2RGB)
-        return frame
-
-    def _bgr2gray(self, frame):
-        frame = cv2.cvtColor(frame.copy(), cv2.COLOR_BGR2GRAY)
-        return frame
 
     @property
     def frames(self):
@@ -36,12 +26,13 @@ class Camera():
             cap.release()
         except Exception as e:
             print("Stop recording loop. Exception {}".format(e))
-
-    def pre_process(self):
-        for frame in self.frames:
-            rgb_frame = self._bgr2rgb(frame)
-            gray_frame = self._bgr2gray(frame)
-            self._queue.put((frame, [rgb_frame, gray_frame]))
     
     def get_frame(self):
         return next(self.frames)
+    
+    def run(self):
+        net_size = (544, 544)
+        for raw_frame in self.frames:
+            #frame = cv2.cvtColor(raw_frame, cv2.COLOR_BGR2RGB)
+            frame = cv2.resize(raw_frame.copy(), net_size)
+            self._queue.put((frame))

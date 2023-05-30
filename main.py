@@ -22,8 +22,7 @@ def main(source):
     q_post = Queue(maxsize=queue_size)
     model = 'YOLACT'
     camera = Camera(source=source,
-                 queue=q_pre,)
-    camera.set()
+                    queue=q_pre,)
     device = RK3588(camera, model)
     post_processes = PostProcesses(model, queue=q_post)
     visualizer = Visualizer()
