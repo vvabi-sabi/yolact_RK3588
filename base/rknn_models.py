@@ -1,6 +1,5 @@
 from pathlib import Path
 from multiprocessing import Process, Queue
-import numpy as np
 from rknnlite.api import RKNNLite
 
 ROOT = Path(__file__).parent.parent.parent.absolute()

@@ -5,7 +5,7 @@ from base import Camera, RK3588
 
 
 def run(device, visualizer, post_process):
-    device._camera.run()
+    device._camera.start()
     device._neuro.run_inference()
     if post_process is not None:
         post_process.run()
