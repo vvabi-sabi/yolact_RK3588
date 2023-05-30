@@ -32,7 +32,6 @@ class RK3588():
     def __init__(self, camera):
         self._camera = camera
         self._neuro = NeuroModule(self._CORES[3],
-                                  self._camera._queue) # ['Model_1', 'Model_2'])
-
+                                  self._camera._queue)
     def get_neuro_outputs(self):
         return self._neuro.get_output()
