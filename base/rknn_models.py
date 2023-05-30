@@ -20,10 +20,8 @@ class RKNNModelNames():
 
 
 def get_model_path(model_name):
-    try:
-        return MODELS_PATH+model_name
-    except IndexError:
-        return None
+    return MODELS_PATH+model_name
+
 
 
 class RKNNModelLoader():
