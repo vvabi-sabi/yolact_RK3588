@@ -19,6 +19,7 @@ Install RKNN-Toolkit2-Lite
 cd yolact/install/
 pip install -r requirements.txt
 pip install rknn_toolkit_lite2-1.4.0-cp39-cp39-linux_aarch64.whl
+```
 
 ## Run
 ```
