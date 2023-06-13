@@ -1,7 +1,8 @@
-import json
+import time
 from pathlib import Path
 import cv2
 import numpy as np
+import onnxruntime
 
 
 COCO_CLASSES = ('person', 'bicycle', 'car', 'motorcycle', 'airplane', 'bus',
@@ -28,214 +29,102 @@ class PostProcess():
 class Visualizer():
     pass
 
-def post_yolov5(outputs, frame):
-    """Overlays bboxes on frames
-    Args
-    -----------------------------------
-    q_in : multiprocessing.Queue
-        Queue that data reads from
-    q_out : multiprocessing.Queue
-        Queue that data sends to
-    -----------------------------------
-    """
-    dets = None
-    data = list()
-    for out in outputs:
-        out = out.reshape([3, -1]+list(out.shape[-2:]))
-        data.append(np.transpose(out, (2, 3, 0, 1)))
-    boxes, classes, scores = yolov5_post_process(data)
-    if boxes is not None:
-        draw(frame, boxes, scores, classes)
-        dets = format_dets(
-            boxes = boxes,
-            classes = classes, # type: ignore
-            scores = scores # type: ignore
-        )
-    return frame, dets
-
 def post_yolact(outputs, frame):
-    pass
+    onnx_postprocess = "postprocess_550x550.onnx"
+    input_size = INPUT_SIZE
+    threshold = 0.1
+    session = onnxruntime.InferenceSession(onnx_postprocess,
+                                           None)
+    onnx_inputs = get_onnx_inputs(outputs)
+    start_time = time.time()
+    onnx_out = session.run(None, {session.get_inputs()[0].name: onnx_inputs[0],
+                                  session.get_inputs()[1].name: onnx_inputs[1],
+                                  session.get_inputs()[2].name: onnx_inputs[2],
+                                  session.get_inputs()[3].name: onnx_inputs[3]})
+    bboxes, scores, class_ids, masks = run_inference(
+        onnx_out,
+        input_size,
+        score_th=threshold
+    )
+    elapsed_time = time.time() - start_time
+    draw(frame, elapsed_time, bboxes, scores, class_ids, masks)
+
 
 
 #__YOLACT__
-def sigmoid(x):
-    return x# 1 / (1 + np.exp(-x))
+def get_onnx_inputs(rknn_outputs):
+    onnx_inputs = [rknn_outputs[1][0], rknn_outputs[0][0], rknn_outputs[3], rknn_outputs[2 ][0]]
+    onnx_inputs[0] = np.transpose(onnx_inputs[0], (2,0,1))
+    onnx_inputs[1] = np.transpose(onnx_inputs[1], (2,0,1))
+    onnx_inputs[3] = np.transpose(onnx_inputs[3], (2,0,1))
+    return onnx_inputs
 
-def xywh2xyxy(x):
-    # Convert [x, y, w, h] to [x1, y1, x2, y2]
-    y = np.copy(x)
-    y[:, 0] = x[:, 0] - x[:, 2] / 2  # top left x
-    y[:, 1] = x[:, 1] - x[:, 3] / 2  # top left y
-    y[:, 2] = x[:, 0] + x[:, 2] / 2  # bottom right x
-    y[:, 3] = x[:, 1] + x[:, 3] / 2  # bottom right y
-    return y
+def run_inference(results, input_size, score_th):
+    # Pre process: Creates 4-dimensional blob from image
+    size = (input_size[1], input_size[0])
+    #input_image = cv.dnn.blobFromImage(image, size=size, swapRB=True)
 
-def detect(input, mask, anchors):
+    #results = onnx_session.run(output_names, {input_name: input_image})
 
-    anchors = [anchors[i] for i in mask]
-    grid_h, grid_w = map(int, input.shape[0:2])
+    def crop(bbox, shape):
+        x1 = int(max(bbox[0] * shape[1], 0))
+        y1 = int(max(bbox[1] * shape[0], 0))
+        x2 = int(max(bbox[2] * shape[1], 0))
+        y2 = int(max(bbox[3] * shape[0], 0))
+        return (slice(y1, y2), slice(x1, x2))
 
-    box_confidence = sigmoid(input[..., 4])
-    box_confidence = np.expand_dims(box_confidence, axis=-1)
+    # Post process
+    bboxes, scores, class_ids, masks = [], [], [], []
+    for result, mask in zip(results[0][0], results[1]):
+        bbox = result[:4].tolist()
+        score = result[4]
+        class_id = int(result[5])
 
-    box_class_probs = sigmoid(input[..., 5:])
+        if score_th > score:
+            continue
 
-    box_xy = sigmoid(input[..., :2])*2 - 0.5
+        # Add 1 to class_id to distinguish it from the background 0
+        mask = np.where(mask > 0.5, class_id + 1, 0).astype(np.uint8)
+        region = crop(bbox, mask.shape)
+        cropped = np.zeros(mask.shape, dtype=np.uint8)
+        cropped[region] = mask[region]
 
-    col = np.tile(np.arange(0, grid_w), grid_w).reshape(-1, grid_w)
-    row = np.tile(np.arange(0, grid_h).reshape(-1, 1), grid_h)
-    col = col.reshape(grid_h, grid_w, 1, 1).repeat(3, axis=-2)
-    row = row.reshape(grid_h, grid_w, 1, 1).repeat(3, axis=-2)
-    grid = np.concatenate((col, row), axis=-1)
-    box_xy += grid
-    box_xy *= int(cfg["inference"]["net_size"]/grid_h)
+        bboxes.append(bbox)
+        class_ids.append(class_id)
+        scores.append(score)
+        masks.append(cropped)
 
-    box_wh = pow(sigmoid(input[..., 2:4])*2, 2)
-    box_wh = box_wh * anchors
+    return bboxes, scores, class_ids, masks
 
-    box = np.concatenate((box_xy, box_wh), axis=-1)
+def get_colors(num):
+    colors = [[0, 0, 0]]
+    np.random.seed(0)
+    for i in range(num):
+        color = np.random.randint(0, 256, [3]).astype(np.uint8)
+        colors.append(color.tolist())
+    return colors
 
-    return box, box_confidence, box_class_probs
+def draw(frame, elapsed_time, bboxes, scores, class_ids, masks):
+    colors = get_colors(len(COCO_CLASSES))
+    frame_height, frame_width = frame.shape[0], frame.shape[1]
+    cv2.putText(frame,
+                "Elapsed Time : " + '{:.1f}'.format(elapsed_time * 1000) + "ms",
+                (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 1, cv2.LINE_AA)
 
-def filter_boxes(boxes, box_confidences, box_class_probs):
-    """Filter boxes with box threshold. It's a bit different with origin
-    yolov5 post process!
-    # Arguments
-        boxes: ndarray, boxes of objects.
-        box_confidences: ndarray, confidences of objects.
-        box_class_probs: ndarray, class_probs of objects.
-    # Returns
-        boxes: ndarray, filtered boxes.
-        classes: ndarray, classes for boxes.
-        scores: ndarray, scores for boxes.
-    """
-    boxes = boxes.reshape(-1, 4)
-    box_confidences = box_confidences.reshape(-1)
-    box_class_probs = box_class_probs.reshape(-1, box_class_probs.shape[-1])
+    # Draw
+    if len(masks) > 0:
+        mask_image = np.zeros(MASK_SHAPE, dtype=np.uint8)
+        for mask in masks:
+            color_mask = np.array(colors, dtype=np.uint8)[mask]
+            filled = np.nonzero(mask)
+            mask_image[filled] = color_mask[filled]
+        mask_image = cv2.resize(mask_image, (frame_width, frame_height), cv2.INTER_NEAREST)
+        cv2.addWeighted(frame, 0.5, mask_image, 0.5, 0.0, frame)
 
-    _box_pos = np.where(box_confidences >= cfg["inference"]["obj_thresh"])
-    boxes = boxes[_box_pos]
-    box_confidences = box_confidences[_box_pos]
-    box_class_probs = box_class_probs[_box_pos]
+    for bbox, score, class_id, mask in zip(bboxes, scores, class_ids, masks):
+        x1, y1 = int(bbox[0] * frame_width), int(bbox[1] * frame_height)
+        x2, y2 = int(bbox[2] * frame_width), int(bbox[3] * frame_height)
 
-    class_max_score = np.max(box_class_probs, axis=-1)
-    classes = np.argmax(box_class_probs, axis=-1)
-    _class_pos = np.where(class_max_score >= cfg["inference"]["obj_thresh"])
-
-    boxes = boxes[_class_pos]
-    classes = classes[_class_pos]
-    scores = (class_max_score* box_confidences)[_class_pos]
-
-    return boxes, classes, scores
-
-def nms_boxes(boxes, scores):
-    """Suppress non-maximal boxes.
-    # Arguments
-        boxes: ndarray, boxes of objects.
-        scores: ndarray, scores of objects.
-    # Returns
-        keep: ndarray, index of effective boxes.
-    """
-    x = boxes[:, 0]
-    y = boxes[:, 1]
-    w = boxes[:, 2] - boxes[:, 0]
-    h = boxes[:, 3] - boxes[:, 1]
-
-    areas = w * h
-    order = scores.argsort()[::-1]
-
-    keep = []
-    while order.size > 0:
-        i = order[0]
-        keep.append(i)
-
-        xx1 = np.maximum(x[i], x[order[1:]])
-        yy1 = np.maximum(y[i], y[order[1:]])
-        xx2 = np.minimum(x[i] + w[i], x[order[1:]] + w[order[1:]])
-        yy2 = np.minimum(y[i] + h[i], y[order[1:]] + h[order[1:]])
-
-        w1 = np.maximum(0.0, xx2 - xx1 + 0.00001)
-        h1 = np.maximum(0.0, yy2 - yy1 + 0.00001)
-        inter = w1 * h1
-
-        ovr = inter / (areas[i] + areas[order[1:]] - inter)
-        inds = np.where(ovr <= cfg["inference"]["nms_thresh"])[0]
-        order = order[inds + 1]
-    keep = np.array(keep)
-    return keep
-
-def yolov5_post_process(input_data):
-    masks = [[0, 1, 2], [3, 4, 5], [6, 7, 8]]
-    anchors = [[10, 13], [16, 30], [33, 23], [30, 61], [62, 45],
-               [59, 119], [116, 90], [156, 198], [373, 326]]
-
-    boxes, classes, scores = [], [], []
-    for input, mask in zip(input_data, masks):
-        b, c, s = detect(input, mask, anchors)
-        b, c, s = filter_boxes(b, c, s)
-        boxes.append(b)
-        classes.append(c)
-        scores.append(s)
-
-    boxes = np.concatenate(boxes)
-    boxes = xywh2xyxy(boxes)
-    classes = np.concatenate(classes)
-    scores = np.concatenate(scores)
-
-    nboxes, nclasses, nscores = [], [], []
-    for c in set(classes):
-        inds = np.where(classes == c)
-        b = boxes[inds]
-        c = classes[inds]
-        s = scores[inds]
-
-        keep = nms_boxes(b, s)
-
-        nboxes.append(b[keep])
-        nclasses.append(c[keep])
-        nscores.append(s[keep])
-
-    if not nclasses and not nscores:
-        return None, None, None
-
-    boxes = np.concatenate(nboxes)
-    classes = np.concatenate(nclasses)
-    scores = np.concatenate(nscores)
-
-    return boxes, classes, scores
-
-def draw(image, boxes, scores, classes):
-    """Draw the boxes on the image.
-    # Argument:
-        image: original image.
-        boxes: ndarray, boxes of objects.
-        classes: ndarray, classes of objects.
-        scores: ndarray, scores of objects.
-        all_classes: all classes name.
-    """
-    for box, score, cl in zip(boxes, scores, classes):
-        width = cfg["camera"]["width"]
-        height = cfg["camera"]["height"]
-        net_size = cfg["inference"]["net_size"]
-        top, left, right, bottom = box
-        top = int(top*(width / net_size))
-        left = int(left*(height / net_size))
-        right = int(right*(width / net_size))
-        bottom = int(bottom*(height / net_size))
-
-        cv2.rectangle(
-            img=image,
-            pt1=(top, left),
-            pt2=(right, bottom),
-            color=(255, 0, 0),
-            thickness=2
-        )
-        cv2.putText(
-            img=image,
-            text='{0} {1:.2f}'.format(cfg["inference"]["classes"][cl], score),
-            org=(top, left - 6),
-            fontFace=cv2.FONT_HERSHEY_SIMPLEX,
-            fontScale=0.6,
-            color=(0, 0, 255),
-            thickness=2
-        )
+        cv2.rectangle(frame, (x1, y1), (x2, y2), (255, 255, 0), 2)
+        cv2.putText(frame, '%s:%.2f' % (COCO_CLASSES[class_id], score),
+                   (x1, y1 - 5), 0, 0.7, (0, 255, 0), 2)
