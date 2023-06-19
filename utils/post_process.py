@@ -23,11 +23,63 @@ COCO_CLASSES = ('person', 'bicycle', 'car', 'motorcycle', 'airplane', 'bus',
 INPUT_SIZE = (550, 550)
 MASK_SHAPE = (138, 138, 3)
 
-class PostProcess():
-    pass
+class OnnxPostProcess():
+    
+    def __init__(self) -> None:
+        self.onnx_postprocess = "postprocess_550x550.onnx"
+        self.input_size = INPUT_SIZE
+        self.threshold = 0.1
+        self.session = onnxruntime.InferenceSession(self.onnx_postprocess,
+                                                    None)
+    
+    def process(self, onnx_inputs):
+        onnx_inputs = self.transpose_input(onnx_inputs)
+        onnx_out = self.session.run(None, {self.session.get_inputs()[0].name: onnx_inputs[0],
+                                           self.session.get_inputs()[1].name: onnx_inputs[1],
+                                           self.session.get_inputs()[2].name: onnx_inputs[2],
+                                           self.session.get_inputs()[3].name: onnx_inputs[3]})
+        bboxes, scores, class_ids, masks = run_inference(onnx_out,
+                                                         self.input_size,
+                                                         score_th=self.threshold)
+        return bboxes, scores, class_ids, masks
+        
+    
+    def transpose_input(self, onnx_inputs):
+        onnx_inputs = [onnx_inputs[1][0], onnx_inputs[0][0], onnx_inputs[3], onnx_inputs[2][0]]
+        onnx_inputs[0] = np.transpose(onnx_inputs[0], (2,0,1))
+        onnx_inputs[1] = np.transpose(onnx_inputs[1], (2,0,1))
+        onnx_inputs[3] = np.transpose(onnx_inputs[3], (2,0,1))
+        return onnx_inputs
+
 
 class Visualizer():
-    pass
+    
+    @classmethod
+    def onnx_draw(frame, elapsed_time, bboxes, scores, class_ids, masks):
+        colors = get_colors(len(COCO_CLASSES))
+        frame_height, frame_width = frame.shape[0], frame.shape[1]
+        cv2.putText(frame,
+                    "Elapsed Time : " + '{:.1f}'.format(elapsed_time * 1000) + "ms",
+                    (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 1, cv2.LINE_AA)
+
+        # Draw
+        if len(masks) > 0:
+            mask_image = np.zeros(MASK_SHAPE, dtype=np.uint8)
+            for mask in masks:
+                color_mask = np.array(colors, dtype=np.uint8)[mask]
+                filled = np.nonzero(mask)
+                mask_image[filled] = color_mask[filled]
+            mask_image = cv2.resize(mask_image, (frame_width, frame_height), cv2.INTER_NEAREST)
+            cv2.addWeighted(frame, 0.5, mask_image, 0.5, 0.0, frame)
+
+        for bbox, score, class_id, mask in zip(bboxes, scores, class_ids, masks):
+            x1, y1 = int(bbox[0] * frame_width), int(bbox[1] * frame_height)
+            x2, y2 = int(bbox[2] * frame_width), int(bbox[3] * frame_height)
+
+            cv2.rectangle(frame, (x1, y1), (x2, y2), (255, 255, 0), 2)
+            cv2.putText(frame, '%s:%.2f' % (COCO_CLASSES[class_id], score),
+                    (x1, y1 - 5), 0, 0.7, (0, 255, 0), 2)
+
 
 def post_yolact(outputs, frame):
     onnx_postprocess = "postprocess_550x550.onnx"
@@ -41,11 +93,9 @@ def post_yolact(outputs, frame):
                                   session.get_inputs()[1].name: onnx_inputs[1],
                                   session.get_inputs()[2].name: onnx_inputs[2],
                                   session.get_inputs()[3].name: onnx_inputs[3]})
-    bboxes, scores, class_ids, masks = run_inference(
-        onnx_out,
-        input_size,
-        score_th=threshold
-    )
+    bboxes, scores, class_ids, masks = run_inference(onnx_out,
+                                                     input_size,
+                                                     score_th=threshold)
     elapsed_time = time.time() - start_time
     draw(frame, elapsed_time, bboxes, scores, class_ids, masks)
 
