@@ -40,9 +40,9 @@ class OnnxPostProcess():
                                            self.session.get_inputs()[1].name: onnx_inputs[1],
                                            self.session.get_inputs()[2].name: onnx_inputs[2],
                                            self.session.get_inputs()[3].name: onnx_inputs[3]})
-        bboxes, scores, class_ids, masks = run_inference(onnx_out,
-                                                         self.input_size,
-                                                         score_th=self.threshold)
+        bboxes, scores, class_ids, masks = self.run(onnx_out,
+                                                    self.input_size,
+                                                    score_th=self.threshold)
         return bboxes, scores, class_ids, masks
         
     
@@ -52,6 +52,44 @@ class OnnxPostProcess():
         onnx_inputs[1] = np.transpose(onnx_inputs[1], (2,0,1))
         onnx_inputs[3] = np.transpose(onnx_inputs[3], (2,0,1))
         return onnx_inputs
+    
+    def run(self,results, input_size, score_th):
+        # Pre process: Creates 4-dimensional blob from image
+        size = (input_size[1], input_size[0])
+        #input_image = cv.dnn.blobFromImage(image, size=size, swapRB=True)
+
+        #results = onnx_session.run(output_names, {input_name: input_image})
+
+        def crop(bbox, shape):
+            x1 = int(max(bbox[0] * shape[1], 0))
+            y1 = int(max(bbox[1] * shape[0], 0))
+            x2 = int(max(bbox[2] * shape[1], 0))
+            y2 = int(max(bbox[3] * shape[0], 0))
+            return (slice(y1, y2), slice(x1, x2))
+
+        # Post process
+        bboxes, scores, class_ids, masks = [], [], [], []
+        for result, mask in zip(results[0][0], results[1]):
+            bbox = result[:4].tolist()
+            score = result[4]
+            class_id = int(result[5])
+
+            if score_th > score:
+                continue
+
+            # Add 1 to class_id to distinguish it from the background 0
+            mask = np.where(mask > 0.5, class_id + 1, 0).astype(np.uint8)
+            region = crop(bbox, mask.shape)
+            cropped = np.zeros(mask.shape, dtype=np.uint8)
+            cropped[region] = mask[region]
+
+            bboxes.append(bbox)
+            class_ids.append(class_id)
+            scores.append(score)
+            masks.append(cropped)
+
+        return bboxes, scores, class_ids, masks
+        
 
 
 class RknnPostProcess():
