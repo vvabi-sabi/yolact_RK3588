@@ -39,7 +39,8 @@ COCO_CLASSES = ('person', 'bicycle', 'car', 'motorcycle', 'airplane', 'bus',
                 'toaster', 'sink', 'refrigerator', 'book', 'clock', 'vase',
                 'scissors', 'teddy bear', 'hair drier', 'toothbrush')
 
-INPUT_SIZE = (550, 550)
+postprocess_type = 'onnx' # 'rknn'
+INPUT_SIZE = ((550,550) if postprocess_type =='onnx' else (544,544))
 MASK_SHAPE = (138, 138, 3)
 
 class OnnxPostProcess():
