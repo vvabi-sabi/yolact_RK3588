@@ -5,7 +5,24 @@ from math import sqrt
 import cv2
 import numpy as np
 import onnxruntime
+from box_utils import nms_numpy, after_nms_numpy
 
+COLORS = np.array([[0, 0, 0], [244, 67, 54], [233, 30, 99], [156, 39, 176], [103, 58, 183], [100, 30, 60],
+                   [63, 81, 181], [33, 150, 243], [3, 169, 244], [0, 188, 212], [20, 55, 200],
+                   [0, 150, 136], [76, 175, 80], [139, 195, 74], [205, 220, 57], [70, 25, 100],
+                   [255, 235, 59], [255, 193, 7], [255, 152, 0], [255, 87, 34], [90, 155, 50],
+                   [121, 85, 72], [158, 158, 158], [96, 125, 139], [15, 67, 34], [98, 55, 20],
+                   [21, 82, 172], [58, 128, 255], [196, 125, 39], [75, 27, 134], [90, 125, 120],
+                   [121, 82, 7], [158, 58, 8], [96, 25, 9], [115, 7, 234], [8, 155, 220],
+                   [221, 25, 72], [188, 58, 158], [56, 175, 19], [215, 67, 64], [198, 75, 20],
+                   [62, 185, 22], [108, 70, 58], [160, 225, 39], [95, 60, 144], [78, 155, 120],
+                   [101, 25, 142], [48, 198, 28], [96, 225, 200], [150, 167, 134], [18, 185, 90],
+                   [21, 145, 172], [98, 68, 78], [196, 105, 19], [215, 67, 84], [130, 115, 170],
+                   [255, 0, 255], [255, 255, 0], [196, 185, 10], [95, 167, 234], [18, 25, 190],
+                   [0, 255, 255], [255, 0, 0], [0, 255, 0], [0, 0, 255], [155, 0, 0],
+                   [0, 155, 0], [0, 0, 155], [46, 22, 130], [255, 0, 155], [155, 0, 255],
+                   [255, 155, 0], [155, 255, 0], [0, 155, 255], [0, 255, 155], [18, 5, 40],
+                   [120, 120, 255], [255, 58, 30], [60, 45, 60], [75, 27, 244], [128, 25, 70]], dtype='uint8')
 
 COCO_CLASSES = ('person', 'bicycle', 'car', 'motorcycle', 'airplane', 'bus',
                 'train', 'truck', 'boat', 'traffic light', 'fire hydrant',
@@ -40,10 +57,7 @@ class OnnxPostProcess():
                                            self.session.get_inputs()[1].name: onnx_inputs[1],
                                            self.session.get_inputs()[2].name: onnx_inputs[2],
                                            self.session.get_inputs()[3].name: onnx_inputs[3]})
-        bboxes, scores, class_ids, masks = self.run(onnx_out,
-                                                    self.input_size,
-                                                    score_th=self.threshold)
-        return bboxes, scores, class_ids, masks
+        return self.run(onnx_out, score_th=self.threshold)
         
     
     def transpose_input(self, onnx_inputs):
@@ -53,13 +67,8 @@ class OnnxPostProcess():
         onnx_inputs[3] = np.transpose(onnx_inputs[3], (2,0,1))
         return onnx_inputs
     
-    def run(self,results, input_size, score_th):
+    def run(self,results, score_th):
         # Pre process: Creates 4-dimensional blob from image
-        size = (input_size[1], input_size[0])
-        #input_image = cv.dnn.blobFromImage(image, size=size, swapRB=True)
-
-        #results = onnx_session.run(output_names, {input_name: input_image})
-
         def crop(bbox, shape):
             x1 = int(max(bbox[0] * shape[1], 0))
             y1 = int(max(bbox[1] * shape[0], 0))
@@ -129,9 +138,8 @@ class RknnPostProcess():
                                                            proto_p,
                                                            self.anchors,
                                                            self.cfg)
-        ids_p, class_p, boxes_p, masks_p = after_nms_numpy(ids_p, class_p, box_p, coef_p, proto_p,
-                                                           self.img_h, self.img_w, self.cfg)
-        return ids_p, class_p, boxes_p, masks_p
+        return after_nms_numpy(ids_p, class_p, box_p, coef_p, proto_p,
+                               self.img_h, self.img_w, self.cfg)
     
     def get_outputs(self, rknn_outputs):
         class_p, box_p, coef_p, proto_p = rknn_outputs
@@ -256,150 +264,7 @@ def np_softmax(x):
     sft_max = np.array(sft_max)
     return sft_max
 
-def box_iou_numpy(box_a, box_b):
-    (n, A), B = box_a.shape[:2], box_b.shape[1]
-    # add a dimension
-    box_a = np.tile(box_a[:, :, None, :], (1, 1, B, 1))
-    box_b = np.tile(box_b[:, None, :, :], (1, A, 1, 1))
 
-    max_xy = np.minimum(box_a[..., 2:], box_b[..., 2:])
-    min_xy = np.maximum(box_a[..., :2], box_b[..., :2])
-    inter = np.clip((max_xy - min_xy), a_min=0, a_max=100000)
-    inter_area = inter[..., 0] * inter[..., 1]
-
-    area_a = (box_a[..., 2] - box_a[..., 0]) * (box_a[..., 3] - box_a[..., 1])
-    area_b = (box_b[..., 2] - box_b[..., 0]) * (box_b[..., 3] - box_b[..., 1])
-
-    return inter_area / (area_a + area_b - inter_area)
-
-def fast_nms_numpy(box_thre, coef_thre, class_thre, cfg):
-    # descending sort
-    idx = np.argsort(-class_thre, axis=1)
-    class_thre = np.sort(class_thre, axis=1)[:, ::-1]
-    idx = idx[:, :cfg['top_k']]
-    class_thre = class_thre[:, :cfg['top_k']]
-    num_classes, num_dets = idx.shape
-    box_thre = box_thre[idx.reshape(-1), :].reshape(num_classes, num_dets, 4)  # [80, 64, 4]
-    coef_thre = coef_thre[idx.reshape(-1), :].reshape(num_classes, num_dets, -1)  # [80, 64, 32]
-    iou = box_iou_numpy(box_thre, box_thre)
-    iou = np.triu(iou, k=1)
-    iou_max = np.max(iou, axis=1)
-    # Now just filter out the ones higher than the threshold
-    keep = (iou_max <= cfg['nms_iou_thre'])
-    # Assign each kept detection to its corresponding class
-    class_ids = np.tile(np.arange(num_classes)[:, None], (1, keep.shape[1]))
-    class_ids, box_nms, coef_nms, class_nms = class_ids[keep], box_thre[keep], coef_thre[keep], class_thre[keep]
-    # Only keep the top cfg.max_num_detections highest scores across all classes
-    idx = np.argsort(-class_nms, axis=0)
-    class_nms = np.sort(class_nms, axis=0)[::-1]
-
-    idx = idx[:cfg['max_detections']]
-    class_nms = class_nms[:cfg['max_detections']]
-
-    class_ids = class_ids[idx]
-    box_nms = box_nms[idx]
-    coef_nms = coef_nms[idx]
-
-    return box_nms, coef_nms, class_ids, class_nms
-
-def nms_numpy(class_pred, box_pred, coef_pred, proto_out, anchors, cfg):
-    class_p = class_pred.squeeze()  # [19248, 81]
-    box_p = box_pred.squeeze()  # [19248, 4]
-    coef_p = coef_pred.squeeze()  # [19248, 32]
-    proto_p = proto_out.squeeze()  # [138, 138, 32]
-    anchors = np.array(anchors).reshape(-1, 4)
-
-    class_p = class_p.transpose(1, 0)
-    # exclude the background class
-    class_p = class_p[1:, :]
-    # get the max score class of 19248 predicted boxes
-    class_p_max = np.max(class_p, axis=0)  # [19248]
-    # filter predicted boxes according the class score
-    keep = (class_p_max > cfg['nms_score_thre'])
-    class_thre = class_p[:, keep]
-    box_thre, anchor_thre, coef_thre = box_p[keep, :], anchors[keep, :], coef_p[keep, :]
-    # decode boxes
-    box_thre = np.concatenate((anchor_thre[:, :2] + box_thre[:, :2] * 0.1 * anchor_thre[:, 2:],
-                               anchor_thre[:, 2:] * np.exp(box_thre[:, 2:] * 0.2)), axis=1)
-    box_thre[:, :2] -= box_thre[:, 2:] / 2
-    box_thre[:, 2:] += box_thre[:, :2]
-
-    print('box_thre', box_thre.shape)
-    if class_thre.shape[1] == 0:
-        return None, None, None, None, None
-    else:
-        assert not cfg['traditional_nms'], 'Traditional nms is not supported with numpy.'
-        box_thre, coef_thre, class_ids, class_thre = fast_nms_numpy(box_thre, coef_thre, class_thre, cfg)
-        return class_ids, class_thre, box_thre, coef_thre, proto_p
-
-def sanitize_coordinates_numpy(_x1, _x2, img_size, padding=0):
-    _x1 = _x1 * img_size
-    _x2 = _x2 * img_size
-
-    x1 = np.minimum(_x1, _x2)
-    x2 = np.maximum(_x1, _x2)
-    x1 = np.clip(x1 - padding, a_min=0, a_max=1000000)
-    x2 = np.clip(x2 + padding, a_min=0, a_max=img_size)
-
-    return x1, x2
-
-def crop_numpy(masks, boxes, padding=1):
-    h, w, n = masks.shape
-    x1, x2 = sanitize_coordinates_numpy(boxes[:, 0], boxes[:, 2], w, padding)
-    y1, y2 = sanitize_coordinates_numpy(boxes[:, 1], boxes[:, 3], h, padding)
-
-    rows = np.tile(np.arange(w)[None, :, None], (h, 1, n))
-    cols = np.tile(np.arange(h)[:, None, None], (1, w, n))
-
-    masks_left = rows >= (x1.reshape(1, 1, -1))
-    masks_right = rows < (x2.reshape(1, 1, -1))
-    masks_up = cols >= (y1.reshape(1, 1, -1))
-    masks_down = cols < (y2.reshape(1, 1, -1))
-
-    crop_mask = masks_left * masks_right * masks_up * masks_down
-
-    return masks * crop_mask
-
-def after_nms_numpy(ids_p, class_p, box_p, coef_p, proto_p, img_h, img_w, cfg=None):
-    def np_sigmoid(x):
-        return 1 / (1 + np.exp(-x))
-
-    if ids_p is None:
-        return None, None, None, None
-
-    print(cfg.visual_thre)
-    if cfg and cfg.visual_thre > 0:
-        keep = class_p >= cfg.visual_thre
-        if not keep.any():
-            return None, None, None, None
-
-        print(len(keep))
-        ids_p = ids_p[keep]
-        class_p = class_p[keep]
-        box_p = box_p[keep]
-        coef_p = coef_p[keep]
-
-    assert not cfg.save_lincomb, 'save_lincomb is not supported in onnx mode.'
-
-    masks = np_sigmoid(np.matmul(proto_p, coef_p.T))
-
-    if not cfg or not cfg.no_crop:  # Crop masks by box_p
-        masks = crop_numpy(masks, box_p)
-
-    ori_size = max(img_h, img_w)
-    masks = cv2.resize(masks, (ori_size, ori_size), interpolation=cv2.INTER_LINEAR)
-
-    if masks.ndim == 2:
-        masks = masks[:, :, None]
-
-    masks = np.transpose(masks, (2, 0, 1))
-    masks = masks > 0.5  # Binarize the masks because of interpolation.
-    masks = masks[:, 0: img_h, :] if img_h < img_w else masks[:, :, 0: img_w]
-
-    box_p *= ori_size
-    box_p = box_p.astype('int32')
-
-    return ids_p, class_p, box_p, masks
 
 
 def post_yolact(outputs, frame):
@@ -470,32 +335,7 @@ def run_inference(results, input_size, score_th):
 def get_colors(num):
     colors = [[0, 0, 0]]
     np.random.seed(0)
-    for i in range(num):
+    for _ in range(num):
         color = np.random.randint(0, 256, [3]).astype(np.uint8)
         colors.append(color.tolist())
     return colors
-
-def draw(frame, elapsed_time, bboxes, scores, class_ids, masks):
-    colors = get_colors(len(COCO_CLASSES))
-    frame_height, frame_width = frame.shape[0], frame.shape[1]
-    cv2.putText(frame,
-                "Elapsed Time : " + '{:.1f}'.format(elapsed_time * 1000) + "ms",
-                (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 1, cv2.LINE_AA)
-
-    # Draw
-    if len(masks) > 0:
-        mask_image = np.zeros(MASK_SHAPE, dtype=np.uint8)
-        for mask in masks:
-            color_mask = np.array(colors, dtype=np.uint8)[mask]
-            filled = np.nonzero(mask)
-            mask_image[filled] = color_mask[filled]
-        mask_image = cv2.resize(mask_image, (frame_width, frame_height), cv2.INTER_NEAREST)
-        cv2.addWeighted(frame, 0.5, mask_image, 0.5, 0.0, frame)
-
-    for bbox, score, class_id, mask in zip(bboxes, scores, class_ids, masks):
-        x1, y1 = int(bbox[0] * frame_width), int(bbox[1] * frame_height)
-        x2, y2 = int(bbox[2] * frame_width), int(bbox[3] * frame_height)
-
-        cv2.rectangle(frame, (x1, y1), (x2, y2), (255, 255, 0), 2)
-        cv2.putText(frame, '%s:%.2f' % (COCO_CLASSES[class_id], score),
-                   (x1, y1 - 5), 0, 0.7, (0, 255, 0), 2)
