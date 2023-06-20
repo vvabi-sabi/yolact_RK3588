@@ -7,6 +7,11 @@ import numpy as np
 import onnxruntime
 from box_utils import nms_numpy, after_nms_numpy
 
+
+postprocess_type = 'onnx' # 'rknn'
+INPUT_SIZE = ((550,550) if postprocess_type =='onnx' else (544,544))
+MASK_SHAPE = (138, 138, 3)
+
 COLORS = np.array([[0, 0, 0], [244, 67, 54], [233, 30, 99], [156, 39, 176], [103, 58, 183], [100, 30, 60],
                    [63, 81, 181], [33, 150, 243], [3, 169, 244], [0, 188, 212], [20, 55, 200],
                    [0, 150, 136], [76, 175, 80], [139, 195, 74], [205, 220, 57], [70, 25, 100],
@@ -39,9 +44,6 @@ COCO_CLASSES = ('person', 'bicycle', 'car', 'motorcycle', 'airplane', 'bus',
                 'toaster', 'sink', 'refrigerator', 'book', 'clock', 'vase',
                 'scissors', 'teddy bear', 'hair drier', 'toothbrush')
 
-postprocess_type = 'onnx' # 'rknn'
-INPUT_SIZE = ((550,550) if postprocess_type =='onnx' else (544,544))
-MASK_SHAPE = (138, 138, 3)
 
 class OnnxPostProcess():
     
