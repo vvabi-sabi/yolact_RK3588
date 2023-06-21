@@ -14,8 +14,8 @@ def get_model_names(model_list):
         path_list.append(RKNNModelNames.get(model))
     return path_list
 
-def get_model_path(model_name):
-    return MODELS_PATH+model_name
+def get_model_path(model_names):
+    return MODELS_PATH+model_names[0]
 
 
 
@@ -59,7 +59,7 @@ class Inference(Process):
     def run(self):
         while True:
             frame = self.input.get()
-            self.q_out.put(self._rknnlite.inference(inputs=[frame]))
+            self.q_out.put(frame, self._rknnlite.inference(inputs=[frame]))
 
 
 class Yolact():
@@ -67,6 +67,6 @@ class Yolact():
     """
     
     def __init__(self, cores, q_input):
-        self._model_name = RKNNModelNames.get_model_names(['YOLACT'])
+        self._model_name = get_model_names(['YOLACT'])
         self._rknnlite = RKNNModelLoader.load_weights(cores, self._model_name)
         self.inference = Inference(q_input, self._rknnlite)

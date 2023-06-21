@@ -1,6 +1,6 @@
 from rknnlite.api import RKNNLite
 
-from rknn_models import Yolact
+from .rknn_models import Yolact
 
 
 class NeuroModule():
@@ -9,9 +9,6 @@ class NeuroModule():
 
     def __init__(self, cores_list, q_input):
         self.net = Yolact(cores_list, q_input)
-
-    def get_output(self):
-        return self.net.inference.q_out.get()
 
     def run_inference(self):
         inf_process = self.net.inference
@@ -33,5 +30,3 @@ class RK3588():
         self._camera = camera
         self._neuro = NeuroModule(self._CORES[3],
                                   self._camera._queue)
-    def get_neuro_outputs(self):
-        return self._neuro.get_output()

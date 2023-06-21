@@ -5,11 +5,13 @@ from math import sqrt
 import cv2
 import numpy as np
 import onnxruntime
+from multiprocessing import Process, Queue
+
 from utils.box_utils import nms_numpy, after_nms_numpy
 
 
 postprocess_type = 'onnx' # 'rknn'
-INPUT_SIZE = ((550,550) if postprocess_type =='onnx' else (544,544))
+INPUT_SIZE = (550 if postprocess_type =='onnx' else 544)
 MASK_SHAPE = (138, 138, 3)
 
 COLORS = np.array([[0, 0, 0], [244, 67, 54], [233, 30, 99], [156, 39, 176], [103, 58, 183], [100, 30, 60],
@@ -45,34 +47,58 @@ COCO_CLASSES = ('person', 'bicycle', 'car', 'motorcycle', 'airplane', 'bus',
                 'scissors', 'teddy bear', 'hair drier', 'toothbrush')
 
 
-class OnnxPostProcess():
+class Detection(Process):
     
-    def __init__(self, queue):
-        self._queue = queue
-        self.onnx_postprocess = "postprocess_550x550.onnx"
+    def __init__(self, input, cfg=None):
+        super().__init__(group=None, target=None, name=None, args=(), kwargs={}, daemon=True)
         self.input_size = INPUT_SIZE
+        self.input = input
+        self.cfg = cfg
+        self.q_out = Queue(maxsize=3)
+    
+    def run(self):
+        while True:
+            frame, inputs = self.input.get()
+            inputs = self.adapt(inputs)
+            results = self.detect(inputs)
+            self.q_out.put((frame, self.prep_display(results)))
+    
+    def adapt(self, net_outputs):
+        '''implementation dependent'''
+        pass
+
+    def detect(self, inputs):
+        '''implementation dependent'''
+        pass
+
+    def prep_display(self, results):
+        '''implementation dependent'''
+        pass
+
+
+class ONNXDetection(Detection):
+
+    def __init__(self, input, cfg):
+        super().__init__(input, cfg)
+        self.onnx_postprocess = "postprocess_550x550.onnx"
+        self.session = onnxruntime.InferenceSession(self.onnx_postprocess, None)
         self.threshold = 0.1
-        self.session = onnxruntime.InferenceSession(self.onnx_postprocess,
-                                                    None)
     
-    def process(self, onnx_inputs):
-        onnx_inputs = self.transpose_input(onnx_inputs)
-        onnx_out = self.session.run(None, {self.session.get_inputs()[0].name: onnx_inputs[0],
-                                           self.session.get_inputs()[1].name: onnx_inputs[1],
-                                           self.session.get_inputs()[2].name: onnx_inputs[2],
-                                           self.session.get_inputs()[3].name: onnx_inputs[3]}
-                                    )
-        return self.detect(onnx_out, score_th=self.threshold)
-        
-    
-    def transpose_input(self, onnx_inputs):
-        onnx_inputs = [onnx_inputs[1][0], onnx_inputs[0][0], onnx_inputs[3], onnx_inputs[2][0]]
+    def adapt(self, net_outputs):
+        onnx_inputs = [net_outputs[1][0], net_outputs[0][0], net_outputs[3], net_outputs[2][0]]
         onnx_inputs[0] = np.transpose(onnx_inputs[0], (2,0,1))
         onnx_inputs[1] = np.transpose(onnx_inputs[1], (2,0,1))
         onnx_inputs[3] = np.transpose(onnx_inputs[3], (2,0,1))
         return onnx_inputs
     
-    def detect(self,results, score_th):
+    def detect(self, onnx_inputs):
+        outputs = self.session.run(None, {self.session.get_inputs()[0].name: onnx_inputs[0],
+                                          self.session.get_inputs()[1].name: onnx_inputs[1],
+                                          self.session.get_inputs()[2].name: onnx_inputs[2],
+                                          self.session.get_inputs()[3].name: onnx_inputs[3]})
+        return outputs
+    
+    def prep_display(self, results):
         # Pre process: Creates 4-dimensional blob from image
         def crop(bbox, shape):
             x1 = int(max(bbox[0] * shape[1], 0))
@@ -80,17 +106,14 @@ class OnnxPostProcess():
             x2 = int(max(bbox[2] * shape[1], 0))
             y2 = int(max(bbox[3] * shape[0], 0))
             return (slice(y1, y2), slice(x1, x2))
-
         # Post process
         bboxes, scores, class_ids, masks = [], [], [], []
         for result, mask in zip(results[0][0], results[1]):
             bbox = result[:4].tolist()
             score = result[4]
             class_id = int(result[5])
-
-            if score_th > score:
+            if self.threshold > score:
                 continue
-
             # Add 1 to class_id to distinguish it from the background 0
             mask = np.where(mask > 0.5, class_id + 1, 0).astype(np.uint8)
             region = crop(bbox, mask.shape)
@@ -101,60 +124,49 @@ class OnnxPostProcess():
             class_ids.append(class_id)
             scores.append(score)
             masks.append(cropped)
-
         return bboxes, scores, class_ids, masks
-        
 
+class RKNNDetection(Detection):
 
-class RknnPostProcess():
-    
-    def __init__(self, queue):
-        self._queue = queue
-        self.img_h = INPUT_SIZE[0]
-        self.img_w = INPUT_SIZE[1]
-        self.cfg = {'weight':'weights/best_30.5_res101_coco_392000.pth',
-                    'image': 'test_544.jpg',
-                    'video' : None,
-                    'img_size' : 544,
-                    'traditional_nms' : False,
-                    'hide_mask' : False,
-                    'hide_bbox' : False,
-                    'hide_score' : False,
-                    'cutout' : False,
-                    'save_lincomb' : False,
-                    'no_crop' : False,
-                    'real_time' : False,
-                    'scales' : [24, 48, 96, 192, 384],
-                    'top_k' : 200,
-                    'max_detections' : 100,
-                    'nms_score_thre' : 0.5,
-                    'nms_iou_thre' : 0.5,
-                    'visual_thre' : 0.3,
-                   }
+    def __init__(self, input, cfg):
+        super().__init__(input, cfg)
         self.anchors = []
-        fpn_fm_shape = [math.ceil(INPUT_SIZE / stride) for stride in (8, 16, 32, 64, 128)]
+        fpn_fm_shape = [math.ceil(self.input_size / stride) for stride in (8, 16, 32, 64, 128)]
         for i, size in enumerate(fpn_fm_shape):
             self.anchors += make_anchors(self.cfg, size, size, self.cfg['scales'][i])
     
-    def process(self, rknn_outputs):
-        class_p, box_p, coef_p, proto_p = self.get_tensors(rknn_outputs)
-        ids_p, class_p, box_p, coef_p, proto_p = nms_numpy(class_p,
-                                                           box_p,
-                                                           coef_p,
-                                                           proto_p,
-                                                           self.anchors,
-                                                           self.cfg)
-        return after_nms_numpy(ids_p, class_p, box_p, coef_p, proto_p,
-                               self.img_h, self.img_w, self.cfg)
-    
-    def get_tensors(self, rknn_outputs):
-        class_p, box_p, coef_p, proto_p = rknn_outputs
+    def adapt(self, net_outputs):
+        class_p, box_p, coef_p, proto_p = net_outputs
         class_p = class_p[0]
         box_p = box_p[0]
         coef_p = coef_p[0]
         class_p = np_softmax(class_p)
         return class_p, box_p, coef_p, proto_p
+    
+    def detect(self, inputs):
+        '''
+        nms_numpy retern class_ids, class_thre, box_thre, coef_thre, proto_p
+        '''
+        return nms_numpy(inputs, self.anchors, self.cfg)
+    
+    def prep_display(self, results):
+        return after_nms_numpy(results, self.input_size, self.input_size, self.cfg)
 
+
+
+class PostProcess():
+    
+    def __init__(self, queue, cfg:None):
+        
+        self.img_h = INPUT_SIZE
+        self.detection = Detection(queue, cfg)
+    
+    def run(self):
+        detection = self.detection
+        detection.start()
+    
+    def get_outputs(self):
+        return self.detection.q_out.get()
 
 
 def make_anchors(cfg, conv_h, conv_w, scale):
@@ -165,7 +177,7 @@ def make_anchors(cfg, conv_h, conv_w, scale):
         x = (i + 0.5) / conv_w
         y = (j + 0.5) / conv_h
 
-        for ar in cfg.aspect_ratios:
+        for ar in cfg['aspect_ratios']:
             ar = sqrt(ar)
             w = scale * ar / cfg['img_size']
             h = scale / ar / cfg['img_size']
@@ -233,20 +245,6 @@ class Visualizer():
             color_masks = COLORS[masks_semantic].astype('uint8')
             img_fused = cv2.addWeighted(color_masks, 0.4, img_origin, 0.6, gamma=0)
 
-            if cfg.cutout:
-                total_obj = (masks_semantic != 0)[:, :, None].repeat(3, 2)
-                total_obj = total_obj * img_origin
-                new_mask = ((masks_semantic == 0) * 255)[:, :, None].repeat(3, 2)
-                img_matting = (total_obj + new_mask).astype('uint8')
-                cv2.imwrite(f'results/images/{img_name}_total_obj.jpg', img_matting)
-
-                for i in range(num_detected):
-                    one_obj = (mask_p[i])[:, :, None].repeat(3, 2)
-                    one_obj = one_obj * img_origin
-                    new_mask = ((mask_p[i] == 0) * 255)[:, :, None].repeat(3, 2)
-                    x1, y1, x2, y2 = box_p[i, :]
-                    img_matting = (one_obj + new_mask)[y1:y2, x1:x2, :]
-                    cv2.imwrite(f'results/images/{img_name}_{i}.jpg', img_matting)
         scale = 0.6
         thickness = 1
         font = cv2.FONT_HERSHEY_DUPLEX
@@ -291,64 +289,111 @@ def get_colors(num):
     return colors
 
 
+class OnnxPostProcess():
+    
+    def __init__(self, queue):
+        self._queue = queue
+        self.onnx_postprocess = "postprocess_550x550.onnx"
+        self.input_size = INPUT_SIZE
+        self.threshold = 0.1
+        self.session = onnxruntime.InferenceSession(self.onnx_postprocess, None)
+    
+    def process(self, onnx_inputs):
+        onnx_inputs = self.transpose_input(onnx_inputs)
+        onnx_out = self.session.run(None, {self.session.get_inputs()[0].name: onnx_inputs[0],
+                                           self.session.get_inputs()[1].name: onnx_inputs[1],
+                                           self.session.get_inputs()[2].name: onnx_inputs[2],
+                                           self.session.get_inputs()[3].name: onnx_inputs[3]}
+                                    )
+        return self.prep_display(onnx_out, score_th=self.threshold)
+        
+    
+    def transpose_input(self, onnx_inputs):
+        onnx_inputs = [onnx_inputs[1][0], onnx_inputs[0][0], onnx_inputs[3], onnx_inputs[2][0]]
+        onnx_inputs[0] = np.transpose(onnx_inputs[0], (2,0,1))
+        onnx_inputs[1] = np.transpose(onnx_inputs[1], (2,0,1))
+        onnx_inputs[3] = np.transpose(onnx_inputs[3], (2,0,1))
+        return onnx_inputs
+    
+    def prep_display(self,results, score_th):
+        # Pre process: Creates 4-dimensional blob from image
+        def crop(bbox, shape):
+            x1 = int(max(bbox[0] * shape[1], 0))
+            y1 = int(max(bbox[1] * shape[0], 0))
+            x2 = int(max(bbox[2] * shape[1], 0))
+            y2 = int(max(bbox[3] * shape[0], 0))
+            return (slice(y1, y2), slice(x1, x2))
 
-#_____________#
-def post_yolact(outputs, frame):
-    onnx_postprocess = "postprocess_550x550.onnx"
-    input_size = INPUT_SIZE
-    threshold = 0.1
-    session = onnxruntime.InferenceSession(onnx_postprocess,
-                                           None)
-    onnx_inputs = get_onnx_inputs(outputs)
-    start_time = time.time()
-    onnx_out = session.run(None, {session.get_inputs()[0].name: onnx_inputs[0],
-                                  session.get_inputs()[1].name: onnx_inputs[1],
-                                  session.get_inputs()[2].name: onnx_inputs[2],
-                                  session.get_inputs()[3].name: onnx_inputs[3]})
-    bboxes, scores, class_ids, masks = run_inference(onnx_out,
-                                                     input_size,
-                                                     score_th=threshold)
-    elapsed_time = time.time() - start_time
-    draw(frame, elapsed_time, bboxes, scores, class_ids, masks)
+        # Post process
+        bboxes, scores, class_ids, masks = [], [], [], []
+        for result, mask in zip(results[0][0], results[1]):
+            bbox = result[:4].tolist()
+            score = result[4]
+            class_id = int(result[5])
 
-#__post_YOLACT__
-def get_onnx_inputs(rknn_outputs):
-    onnx_inputs = [rknn_outputs[1][0], rknn_outputs[0][0], rknn_outputs[3], rknn_outputs[2 ][0]]
-    onnx_inputs[0] = np.transpose(onnx_inputs[0], (2,0,1))
-    onnx_inputs[1] = np.transpose(onnx_inputs[1], (2,0,1))
-    onnx_inputs[3] = np.transpose(onnx_inputs[3], (2,0,1))
-    return onnx_inputs
+            if score_th > score:
+                continue
 
-def run_inference(results, input_size, score_th):
-    # Pre process: Creates 4-dimensional blob from image
-    size = (input_size[1], input_size[0])
+            # Add 1 to class_id to distinguish it from the background 0
+            mask = np.where(mask > 0.5, class_id + 1, 0).astype(np.uint8)
+            region = crop(bbox, mask.shape)
+            cropped = np.zeros(mask.shape, dtype=np.uint8)
+            cropped[region] = mask[region]
 
-    def crop(bbox, shape):
-        x1 = int(max(bbox[0] * shape[1], 0))
-        y1 = int(max(bbox[1] * shape[0], 0))
-        x2 = int(max(bbox[2] * shape[1], 0))
-        y2 = int(max(bbox[3] * shape[0], 0))
-        return (slice(y1, y2), slice(x1, x2))
+            bboxes.append(bbox)
+            class_ids.append(class_id)
+            scores.append(score)
+            masks.append(cropped)
 
-    # Post process
-    bboxes, scores, class_ids, masks = [], [], [], []
-    for result, mask in zip(results[0][0], results[1]):
-        bbox = result[:4].tolist()
-        score = result[4]
-        class_id = int(result[5])
+        return bboxes, scores, class_ids, masks
 
-        if score_th > score:
-            continue
 
-        # Add 1 to class_id to distinguish it from the background 0
-        mask = np.where(mask > 0.5, class_id + 1, 0).astype(np.uint8)
-        region = crop(bbox, mask.shape)
-        cropped = np.zeros(mask.shape, dtype=np.uint8)
-        cropped[region] = mask[region]
-
-        bboxes.append(bbox)
-        class_ids.append(class_id)
-        scores.append(score)
-        masks.append(cropped)
-
-    return bboxes, scores, class_ids, masks
+class RknnPostProcess():
+    
+    def __init__(self, queue):
+        self._queue = queue
+        self.img_h = INPUT_SIZE
+        self.img_w = INPUT_SIZE
+        self.cfg = {'weight':'weights/best_30.5_res101_coco_392000.pth',
+                    'image': 'test_544.jpg',
+                    'video' : None,
+                    'img_size' : 544,
+                    'traditional_nms' : False,
+                    'hide_mask' : False,
+                    'hide_bbox' : False,
+                    'hide_score' : False,
+                    'cutout' : False,
+                    'save_lincomb' : False,
+                    'no_crop' : False,
+                    'real_time' : False,
+                    'scales' : [24, 48, 96, 192, 384],
+                    'aspect_ratios': [1, 0.5, 2],
+                    'top_k' : 200,
+                    'max_detections' : 100,
+                    'nms_score_thre' : 0.5,
+                    'nms_iou_thre' : 0.5,
+                    'visual_thre' : 0.3,
+                   }
+        self.anchors = []
+        fpn_fm_shape = [math.ceil(INPUT_SIZE / stride) for stride in (8, 16, 32, 64, 128)]
+        for i, size in enumerate(fpn_fm_shape):
+            self.anchors += make_anchors(self.cfg, size, size, self.cfg['scales'][i])
+    
+    def process(self, rknn_outputs):
+        class_p, box_p, coef_p, proto_p = self.get_tensors(rknn_outputs)
+        ids_p, class_p, box_p, coef_p, proto_p = nms_numpy(class_p,
+                                                           box_p,
+                                                           coef_p,
+                                                           proto_p,
+                                                           self.anchors,
+                                                           self.cfg)
+        return after_nms_numpy(ids_p, class_p, box_p, coef_p, proto_p,
+                               self.img_h, self.img_w, self.cfg)
+    
+    def get_tensors(self, rknn_outputs):
+        class_p, box_p, coef_p, proto_p = rknn_outputs
+        class_p = class_p[0]
+        box_p = box_p[0]
+        coef_p = coef_p[0]
+        class_p = np_softmax(class_p)
+        return class_p, box_p, coef_p, proto_p
