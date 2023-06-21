@@ -1,6 +1,6 @@
 from rknnlite.api import RKNNLite
 
-from rknn_models import YolAct
+from rknn_models import Yolact
 
 
 class NeuroModule():
@@ -8,7 +8,7 @@ class NeuroModule():
     _PROCESSES_NUMBER = 3
 
     def __init__(self, cores_list, q_input):
-        self.net = YolAct(cores_list, q_input)
+        self.net = Yolact(cores_list, q_input)
 
     def get_output(self):
         return self.net.inference.q_out.get()

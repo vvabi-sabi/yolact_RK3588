@@ -29,7 +29,7 @@ class RKNNModelLoader():
         self.async_mode = False
     
     @staticmethod
-    def load_rknn_model(core, model):
+    def load_weights(core, model):
         model = get_model_path(model)
         rknnlite = RKNNLite()
         print(f"Export rknn model - {model}")
@@ -62,11 +62,11 @@ class Inference(Process):
             self.q_out.put(self._rknnlite.inference(inputs=[frame]))
 
 
-class YolAct():
+class Yolact():
     """
     """
     
     def __init__(self, cores, q_input):
         self._model_name = RKNNModelNames.get_model_names(['YOLACT'])
-        self._rknnlite = RKNNModelLoader.load_rknn_model(cores, self._model_name)
+        self._rknnlite = RKNNModelLoader.load_weights(cores, self._model_name)
         self.inference = Inference(q_input, self._rknnlite)

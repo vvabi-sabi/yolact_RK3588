@@ -1,6 +1,6 @@
 from multiprocessing import Queue
 
-from utils import PostProcesses, Visualizer
+from utils import RknnPostProcess, Visualizer
 from base import Camera, RK3588
 
 
@@ -11,8 +11,8 @@ def run(device, visualizer, post_process):
         post_process.run()
         while True:
             frame, outputs = device.get_neuro_outputs()
-            frame = post_process(frame, outputs)
-            visualizer.show_frame(frame)
+            out = post_process(outputs)
+            visualizer.show_frame(frame, out)
 
 def main(source):
     """
@@ -20,12 +20,12 @@ def main(source):
     queue_size = 5
     q_pre = Queue(maxsize=queue_size)
     q_post = Queue(maxsize=queue_size)
-    model = 'YOLACT'
+    model = 'YOLACT' # 'YOLACT_EDGE'
     camera = Camera(source=source,
                     queue=q_pre,)
     device = RK3588(camera, model)
-    post_processes = PostProcesses(model, queue=q_post)
-    visualizer = Visualizer()
+    post_processes = RknnPostProcess(queue=q_post)
+    visualizer = Visualizer(onnx=False)
     try:
         run(device, visualizer, post_processes)
     except Exception as e:

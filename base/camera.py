@@ -1,6 +1,8 @@
 import cv2
 from multiprocessing import Process
 
+from utils import INPUT_SIZE
+
 
 class Camera(Process):
     """
@@ -25,13 +27,13 @@ class Camera(Process):
                 yield frame
             cap.release()
         except Exception as e:
-            print("Stop recording loop. Exception {}".format(e))
+            print(f"Stop recording loop. Exception {e}")
     
     def get_frame(self):
         return next(self.frames)
     
     def run(self):
-        net_size = (544, 544)
+        net_size = INPUT_SIZE #(544, 544)
         for raw_frame in self.frames:
             #frame = cv2.cvtColor(raw_frame, cv2.COLOR_BGR2RGB)
             frame = cv2.resize(raw_frame.copy(), net_size)

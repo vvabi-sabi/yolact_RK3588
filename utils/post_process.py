@@ -47,7 +47,8 @@ COCO_CLASSES = ('person', 'bicycle', 'car', 'motorcycle', 'airplane', 'bus',
 
 class OnnxPostProcess():
     
-    def __init__(self):
+    def __init__(self, queue):
+        self._queue = queue
         self.onnx_postprocess = "postprocess_550x550.onnx"
         self.input_size = INPUT_SIZE
         self.threshold = 0.1
@@ -59,8 +60,9 @@ class OnnxPostProcess():
         onnx_out = self.session.run(None, {self.session.get_inputs()[0].name: onnx_inputs[0],
                                            self.session.get_inputs()[1].name: onnx_inputs[1],
                                            self.session.get_inputs()[2].name: onnx_inputs[2],
-                                           self.session.get_inputs()[3].name: onnx_inputs[3]})
-        return self.run(onnx_out, score_th=self.threshold)
+                                           self.session.get_inputs()[3].name: onnx_inputs[3]}
+                                    )
+        return self.detect(onnx_out, score_th=self.threshold)
         
     
     def transpose_input(self, onnx_inputs):
@@ -70,7 +72,7 @@ class OnnxPostProcess():
         onnx_inputs[3] = np.transpose(onnx_inputs[3], (2,0,1))
         return onnx_inputs
     
-    def run(self,results, score_th):
+    def detect(self,results, score_th):
         # Pre process: Creates 4-dimensional blob from image
         def crop(bbox, shape):
             x1 = int(max(bbox[0] * shape[1], 0))
@@ -106,7 +108,8 @@ class OnnxPostProcess():
 
 class RknnPostProcess():
     
-    def __init__(self):
+    def __init__(self, queue):
+        self._queue = queue
         self.img_h = INPUT_SIZE[0]
         self.img_w = INPUT_SIZE[1]
         self.cfg = {'weight':'weights/best_30.5_res101_coco_392000.pth',
@@ -127,14 +130,14 @@ class RknnPostProcess():
                     'nms_score_thre' : 0.5,
                     'nms_iou_thre' : 0.5,
                     'visual_thre' : 0.3,
-                  }
+                   }
         self.anchors = []
         fpn_fm_shape = [math.ceil(INPUT_SIZE / stride) for stride in (8, 16, 32, 64, 128)]
         for i, size in enumerate(fpn_fm_shape):
             self.anchors += make_anchors(self.cfg, size, size, self.cfg['scales'][i])
     
     def process(self, rknn_outputs):
-        class_p, box_p, coef_p, proto_p = self.get_outputs(rknn_outputs)
+        class_p, box_p, coef_p, proto_p = self.get_tensors(rknn_outputs)
         ids_p, class_p, box_p, coef_p, proto_p = nms_numpy(class_p,
                                                            box_p,
                                                            coef_p,
@@ -144,7 +147,7 @@ class RknnPostProcess():
         return after_nms_numpy(ids_p, class_p, box_p, coef_p, proto_p,
                                self.img_h, self.img_w, self.cfg)
     
-    def get_outputs(self, rknn_outputs):
+    def get_tensors(self, rknn_outputs):
         class_p, box_p, coef_p, proto_p = rknn_outputs
         class_p = class_p[0]
         box_p = box_p[0]
@@ -154,9 +157,41 @@ class RknnPostProcess():
 
 
 
+def make_anchors(cfg, conv_h, conv_w, scale):
+    prior_data = []
+    # Iteration order is important (it has to sync up with the convout)
+    for j, i in product(range(conv_h), range(conv_w)):
+        # + 0.5 because priors are in center
+        x = (i + 0.5) / conv_w
+        y = (j + 0.5) / conv_h
+
+        for ar in cfg.aspect_ratios:
+            ar = sqrt(ar)
+            w = scale * ar / cfg['img_size']
+            h = scale / ar / cfg['img_size']
+
+            prior_data += [x, y, w, h]
+
+    return prior_data
+
+def np_softmax(x):
+    np_max = np.max(x, axis=1)
+    sft_max = []
+    for idx, pred in enumerate(x):
+        e_x = np.exp(pred - np_max[idx])
+        sft_max.append(e_x / e_x.sum())
+    sft_max = np.array(sft_max)
+    return sft_max
+
+
 class Visualizer():
     
-    @classmethod
+    def __init__(self, onnx=True):
+        self.onnx = onnx
+        if self.onnx:
+            self.draw = Visualizer.onnx_draw
+
+    @staticmethod
     def onnx_draw(frame, elapsed_time, bboxes, scores, class_ids, masks):
         colors = get_colors(len(COCO_CLASSES))
         frame_height, frame_width = frame.shape[0], frame.shape[1]
@@ -181,9 +216,10 @@ class Visualizer():
             cv2.rectangle(frame, (x1, y1), (x2, y2), (255, 255, 0), 2)
             cv2.putText(frame, '%s:%.2f' % (COCO_CLASSES[class_id], score),
                     (x1, y1 - 5), 0, 0.7, (0, 255, 0), 2)
+        return frame
     
-    @classmethod
-    def rknn_draw(ids_p, class_p, box_p, mask_p, img_origin, cfg, img_name=None, fps=None):
+    @staticmethod
+    def rknn_draw(img_origin, ids_p, class_p, box_p, mask_p, cfg, img_name=None, fps=None):
         if ids_p is None:
             return img_origin
 
@@ -239,37 +275,24 @@ class Visualizer():
             cv2.putText(img_fused, fps_str, (0, text_h + 2), font, scale, (255, 255, 255), thickness, cv2.LINE_AA)
 
         return img_fused
+    
+    def show_frame(self, frame, out):
+        frame = self.draw(frame, out)
+        cv2.imshow('Yolact Inference', frame)
+        cv2.waitKey(1)
 
 
-def make_anchors(cfg, conv_h, conv_w, scale):
-    prior_data = []
-    # Iteration order is important (it has to sync up with the convout)
-    for j, i in product(range(conv_h), range(conv_w)):
-        # + 0.5 because priors are in center
-        x = (i + 0.5) / conv_w
-        y = (j + 0.5) / conv_h
-
-        for ar in cfg.aspect_ratios:
-            ar = sqrt(ar)
-            w = scale * ar / cfg['img_size']
-            h = scale / ar / cfg['img_size']
-
-            prior_data += [x, y, w, h]
-
-    return prior_data
-
-def np_softmax(x):
-    np_max = np.max(x, axis=1)
-    sft_max = []
-    for idx, pred in enumerate(x):
-        e_x = np.exp(pred - np_max[idx])
-        sft_max.append(e_x / e_x.sum())
-    sft_max = np.array(sft_max)
-    return sft_max
+def get_colors(num):
+    colors = [[0, 0, 0]]
+    np.random.seed(0)
+    for _ in range(num):
+        color = np.random.randint(0, 256, [3]).astype(np.uint8)
+        colors.append(color.tolist())
+    return colors
 
 
 
-
+#_____________#
 def post_yolact(outputs, frame):
     onnx_postprocess = "postprocess_550x550.onnx"
     input_size = INPUT_SIZE
@@ -288,9 +311,7 @@ def post_yolact(outputs, frame):
     elapsed_time = time.time() - start_time
     draw(frame, elapsed_time, bboxes, scores, class_ids, masks)
 
-
-
-#__YOLACT__
+#__post_YOLACT__
 def get_onnx_inputs(rknn_outputs):
     onnx_inputs = [rknn_outputs[1][0], rknn_outputs[0][0], rknn_outputs[3], rknn_outputs[2 ][0]]
     onnx_inputs[0] = np.transpose(onnx_inputs[0], (2,0,1))
@@ -301,9 +322,6 @@ def get_onnx_inputs(rknn_outputs):
 def run_inference(results, input_size, score_th):
     # Pre process: Creates 4-dimensional blob from image
     size = (input_size[1], input_size[0])
-    #input_image = cv.dnn.blobFromImage(image, size=size, swapRB=True)
-
-    #results = onnx_session.run(output_names, {input_name: input_image})
 
     def crop(bbox, shape):
         x1 = int(max(bbox[0] * shape[1], 0))
@@ -334,11 +352,3 @@ def run_inference(results, input_size, score_th):
         masks.append(cropped)
 
     return bboxes, scores, class_ids, masks
-
-def get_colors(num):
-    colors = [[0, 0, 0]]
-    np.random.seed(0)
-    for _ in range(num):
-        color = np.random.randint(0, 256, [3]).astype(np.uint8)
-        colors.append(color.tolist())
-    return colors
