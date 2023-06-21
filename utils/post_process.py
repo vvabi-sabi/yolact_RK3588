@@ -5,7 +5,7 @@ from math import sqrt
 import cv2
 import numpy as np
 import onnxruntime
-from box_utils import nms_numpy, after_nms_numpy
+from utils.box_utils import nms_numpy, after_nms_numpy
 
 
 postprocess_type = 'onnx' # 'rknn'

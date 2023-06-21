@@ -1,1 +1,1 @@
-from .post_processes import PostProcesses, Visualizer
+from .post_process import RknnPostProcess, OnnxPostProcess, Visualizer, INPUT_SIZE
