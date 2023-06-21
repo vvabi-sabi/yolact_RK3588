@@ -56,5 +56,5 @@ def main(source):
 
 
 if __name__ == "__main__":
-    camera_source = 11 # 'path/to/video.mp3'
+    camera_source = 0 # 'path/to/video.mp3'
     main(camera_source)

@@ -33,7 +33,7 @@ class Camera(Process):
         return next(self.frames)
     
     def run(self):
-        net_size = INPUT_SIZE #(544, 544)
+        net_size = (INPUT_SIZE, INPUT_SIZE) #(544, 544)
         for raw_frame in self.frames:
             #frame = cv2.cvtColor(raw_frame, cv2.COLOR_BGR2RGB)
             frame = cv2.resize(raw_frame.copy(), net_size)

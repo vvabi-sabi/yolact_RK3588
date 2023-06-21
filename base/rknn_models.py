@@ -59,7 +59,7 @@ class Inference(Process):
     def run(self):
         while True:
             frame = self.input.get()
-            self.q_out.put(frame, self._rknnlite.inference(inputs=[frame]))
+            self.q_out.put((frame, self._rknnlite.inference(inputs=[frame])))
 
 
 class Yolact():
