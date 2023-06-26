@@ -46,7 +46,8 @@ def main(source):
                     queue=q_pre)
     device = RK3588(camera)
     post_processes = PostProcess(queue=device._neuro.net.inference.q_out,
-                                 cfg = postprocess_cfg) #q_post)
+                                 cfg=postprocess_cfg,
+                                 onnx=False) #q_post)
     visualizer = Visualizer(onnx=False)
     try:
         run(device, visualizer, post_processes)
@@ -56,5 +57,5 @@ def main(source):
 
 
 if __name__ == "__main__":
-    camera_source = 0 # 'path/to/video.mp3'
+    camera_source = 11 # 'path/to/video.mp3'
     main(camera_source)

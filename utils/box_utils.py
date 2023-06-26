@@ -69,7 +69,6 @@ def nms_numpy(class_pred, box_pred, coef_pred, proto_out, anchors, cfg):
     box_thre[:, :2] -= box_thre[:, 2:] / 2
     box_thre[:, 2:] += box_thre[:, :2]
 
-    print('box_thre', box_thre.shape)
     if class_thre.shape[1] == 0:
         return None, None, None, None, None
     else:
@@ -112,23 +111,21 @@ def after_nms_numpy(ids_p, class_p, box_p, coef_p, proto_p, img_h, img_w, cfg=No
     if ids_p is None:
         return None, None, None, None
 
-    print(cfg.visual_thre)
-    if cfg and cfg.visual_thre > 0:
-        keep = class_p >= cfg.visual_thre
+    if cfg and cfg['visual_thre'] > 0:
+        keep = class_p >= cfg['visual_thre']
         if not keep.any():
             return None, None, None, None
 
-        print(len(keep))
         ids_p = ids_p[keep]
         class_p = class_p[keep]
         box_p = box_p[keep]
         coef_p = coef_p[keep]
 
-    assert not cfg.save_lincomb, 'save_lincomb is not supported in onnx mode.'
+    assert not cfg['save_lincomb'], 'save_lincomb is not supported in onnx mode.'
 
     masks = np_sigmoid(np.matmul(proto_p, coef_p.T))
 
-    if not cfg or not cfg.no_crop:  # Crop masks by box_p
+    if not cfg or not cfg['no_crop']:  # Crop masks by box_p
         masks = crop_numpy(masks, box_p)
 
     ori_size = max(img_h, img_w)

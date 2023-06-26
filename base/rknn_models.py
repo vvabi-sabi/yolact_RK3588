@@ -3,10 +3,11 @@ from multiprocessing import Process, Queue
 from rknnlite.api import RKNNLite
 
 ROOT = Path(__file__).parent.parent.parent.absolute()
-MODELS_PATH = str(ROOT) + "/models/"
+MODELS_PATH = str(ROOT) + "/yolact_RK3588/models/"
 
 
-RKNNModelNames = {'YOLACT':'yolact.rknn'}
+RKNNModelNames = {'YOLACT':'yolact_550.rknn',
+                  'YOLACT_minimal':'yolact_544.rknn'}
 
 def get_model_names(model_list):
     path_list = []

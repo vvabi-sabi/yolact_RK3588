@@ -10,7 +10,7 @@ from multiprocessing import Process, Queue
 from utils.box_utils import nms_numpy, after_nms_numpy
 
 
-postprocess_type = 'onnx' # 'rknn'
+postprocess_type = 'onnx' # 'rknn' 'onnx'
 INPUT_SIZE = (550 if postprocess_type =='onnx' else 544)
 MASK_SHAPE = (138, 138, 3)
 
@@ -80,7 +80,7 @@ class ONNXDetection(Detection):
 
     def __init__(self, input, cfg):
         super().__init__(input, cfg)
-        self.onnx_postprocess = "postprocess_550x550.onnx"
+        self.onnx_postprocess = "utils/postprocess_550x550.onnx"
         self.session = onnxruntime.InferenceSession(self.onnx_postprocess, None)
         self.threshold = 0.1
     
@@ -147,19 +147,22 @@ class RKNNDetection(Detection):
         '''
         nms_numpy retern class_ids, class_thre, box_thre, coef_thre, proto_p
         '''
-        return nms_numpy(inputs, self.anchors, self.cfg)
+        return nms_numpy(*inputs, anchors=self.anchors, cfg=self.cfg)
     
     def prep_display(self, results):
-        return after_nms_numpy(results, self.input_size, self.input_size, self.cfg)
+        return after_nms_numpy(*results, self.input_size, self.input_size, self.cfg)
 
 
 
 class PostProcess():
     
-    def __init__(self, queue, cfg:None):
+    def __init__(self, queue, cfg:None, onnx:True):
         
         self.img_h = INPUT_SIZE
-        self.detection = Detection(queue, cfg)
+        if onnx:
+            self.detection = ONNXDetection(queue, cfg)
+        else:
+            self.detection = RKNNDetection(queue, cfg)
     
     def run(self):
         detection = self.detection
@@ -202,6 +205,8 @@ class Visualizer():
         self.onnx = onnx
         if self.onnx:
             self.draw = Visualizer.onnx_draw
+        else:
+            self.draw = Visualizer.rknn_draw
 
     @staticmethod
     def onnx_draw(frame, elapsed_time, bboxes, scores, class_ids, masks):
@@ -231,51 +236,50 @@ class Visualizer():
         return frame
     
     @staticmethod
-    def rknn_draw(img_origin, ids_p, class_p, box_p, mask_p, cfg, img_name=None, fps=None):
+    def rknn_draw(img_origin, ids_p, class_p, box_p, mask_p, cfg=None, fps=None):
+        hide_score = False
         if ids_p is None:
             return img_origin
 
         num_detected = ids_p.shape[0]
 
         img_fused = img_origin
-        if not cfg.hide_mask:
-            masks_semantic = mask_p * (ids_p[:, None, None] + 1)  # expand ids_p' shape for broadcasting
-            # The color of the overlap area is different because of the '%' operation.
-            masks_semantic = masks_semantic.astype('int').sum(axis=0) % (cfg.num_classes - 1)
-            color_masks = COLORS[masks_semantic].astype('uint8')
-            img_fused = cv2.addWeighted(color_masks, 0.4, img_origin, 0.6, gamma=0)
+        masks_semantic = mask_p * (ids_p[:, None, None] + 1)  # expand ids_p' shape for broadcasting
+        # The color of the overlap area is different because of the '%' operation.
+        masks_semantic = masks_semantic.astype('int').sum(axis=0) % (len(COCO_CLASSES) - 1)
+        color_masks = COLORS[masks_semantic].astype('uint8')
+        img_fused = cv2.addWeighted(color_masks, 0.4, img_origin, 0.6, gamma=0)
 
         scale = 0.6
         thickness = 1
         font = cv2.FONT_HERSHEY_DUPLEX
 
-        if not cfg.hide_bbox:
-            for i in reversed(range(num_detected)):
-                x1, y1, x2, y2 = box_p[i, :]
+        for i in reversed(range(num_detected)):
+            x1, y1, x2, y2 = box_p[i, :]
 
-                color = COLORS[ids_p[i] + 1].tolist()
-                cv2.rectangle(img_fused, (x1, y1), (x2, y2), color, thickness)
+            color = COLORS[ids_p[i] + 1].tolist()
+            cv2.rectangle(img_fused, (x1, y1), (x2, y2), color, thickness)
 
-                class_name = cfg.class_names[ids_p[i]]
-                text_str = f'{class_name}: {class_p[i]:.2f}' if not cfg.hide_score else class_name
+            class_name = COCO_CLASSES[ids_p[i]]
+            text_str = f'{class_name}: {class_p[i]:.2f}' if not hide_score else class_name
 
-                text_w, text_h = cv2.getTextSize(text_str, font, scale, thickness)[0]
-                cv2.rectangle(img_fused, (x1, y1), (x1 + text_w, y1 + text_h + 5), color, -1)
-                cv2.putText(img_fused, text_str, (x1, y1 + 15), font, scale, (255, 255, 255), thickness, cv2.LINE_AA)
+            text_w, text_h = cv2.getTextSize(text_str, font, scale, thickness)[0]
+            cv2.rectangle(img_fused, (x1, y1), (x1 + text_w, y1 + text_h + 5), color, -1)
+            cv2.putText(img_fused, text_str, (x1, y1 + 15), font, scale, (255, 255, 255), thickness, cv2.LINE_AA)
 
-        if cfg.real_time:
-            fps_str = f'fps: {fps:.2f}'
-            text_w, text_h = cv2.getTextSize(fps_str, font, scale, thickness)[0]
-            # Create a shadow to show the fps more clearly
-            img_fused = img_fused.astype(np.float32)
-            img_fused[0:text_h + 8, 0:text_w + 8] *= 0.6
-            img_fused = img_fused.astype(np.uint8)
-            cv2.putText(img_fused, fps_str, (0, text_h + 2), font, scale, (255, 255, 255), thickness, cv2.LINE_AA)
+        # if cfg.real_time:
+        #     fps_str = f'fps: {fps:.2f}'
+        #     text_w, text_h = cv2.getTextSize(fps_str, font, scale, thickness)[0]
+        #     # Create a shadow to show the fps more clearly
+        #     img_fused = img_fused.astype(np.float32)
+        #     img_fused[0:text_h + 8, 0:text_w + 8] *= 0.6
+        #     img_fused = img_fused.astype(np.uint8)
+        #     cv2.putText(img_fused, fps_str, (0, text_h + 2), font, scale, (255, 255, 255), thickness, cv2.LINE_AA)
 
         return img_fused
     
     def show_frame(self, frame, out):
-        frame = self.draw(frame, out)
+        frame = self.draw(frame, *out)
         cv2.imshow('Yolact Inference', frame)
         cv2.waitKey(1)
 
