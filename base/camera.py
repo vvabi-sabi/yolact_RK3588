@@ -37,4 +37,4 @@ class Camera(Process):
         for raw_frame in self.frames:
             #frame = cv2.cvtColor(raw_frame, cv2.COLOR_BGR2RGB)
             frame = cv2.resize(raw_frame.copy(), net_size)
-            self._queue.put((frame))
+            self._queue.put_nowait((frame))

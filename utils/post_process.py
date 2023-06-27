@@ -85,7 +85,7 @@ class ONNXDetection(Detection):
         self.threshold = 0.1
     
     def adapt(self, net_outputs):
-        onnx_inputs = [net_outputs[1][0], net_outputs[0][0], net_outputs[3], net_outputs[2][0]]
+        onnx_inputs = [net_outputs[0][0], net_outputs[2][0], net_outputs[3], net_outputs[1][0]]
         onnx_inputs[0] = np.transpose(onnx_inputs[0], (2,0,1))
         onnx_inputs[1] = np.transpose(onnx_inputs[1], (2,0,1))
         onnx_inputs[3] = np.transpose(onnx_inputs[3], (2,0,1))
@@ -267,7 +267,7 @@ class Visualizer():
             cv2.rectangle(img_fused, (x1, y1), (x1 + text_w, y1 + text_h + 5), color, -1)
             cv2.putText(img_fused, text_str, (x1, y1 + 15), font, scale, (255, 255, 255), thickness, cv2.LINE_AA)
 
-        # if cfg.real_time:
+        # if real_time:
         #     fps_str = f'fps: {fps:.2f}'
         #     text_w, text_h = cv2.getTextSize(fps_str, font, scale, thickness)[0]
         #     # Create a shadow to show the fps more clearly
