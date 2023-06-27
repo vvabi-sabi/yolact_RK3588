@@ -10,4 +10,5 @@ __pycache__
 *.rknn
 *.onnx
 !models/yolact_544.rknn
+!models/yolact_550.rknn
 !utils/postprocess_550x550.onnx
