@@ -24,8 +24,8 @@ def fast_nms_numpy(box_thre, coef_thre, class_thre, cfg):
     idx = idx[:, :cfg['top_k']]
     class_thre = class_thre[:, :cfg['top_k']]
     num_classes, num_dets = idx.shape
-    box_thre = box_thre[idx.reshape(-1), :].reshape(num_classes, num_dets, 4)  # [80, 64, 4]
-    coef_thre = coef_thre[idx.reshape(-1), :].reshape(num_classes, num_dets, -1)  # [80, 64, 32]
+    box_thre = box_thre[idx.reshape(-1), :].reshape(num_classes, num_dets, 4)
+    coef_thre = coef_thre[idx.reshape(-1), :].reshape(num_classes, num_dets, -1)
     iou = box_iou_numpy(box_thre, box_thre)
     iou = np.triu(iou, k=1)
     iou_max = np.max(iou, axis=1)

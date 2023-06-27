@@ -237,6 +237,7 @@ class Visualizer():
     
     @staticmethod
     def rknn_draw(img_origin, ids_p, class_p, box_p, mask_p, cfg=None, fps=None):
+        real_time = False
         hide_score = False
         if ids_p is None:
             return img_origin
