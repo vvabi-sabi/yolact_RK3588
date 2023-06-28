@@ -10,8 +10,6 @@ from multiprocessing import Process, Queue
 from utils.box_utils import nms_numpy, after_nms_numpy
 
 
-postprocess_type = 'onnx' # 'rknn' 'onnx'
-INPUT_SIZE = (550 if postprocess_type =='onnx' else 544)
 MASK_SHAPE = (138, 138, 3)
 
 COLORS = np.array([[0, 0, 0], [244, 67, 54], [233, 30, 99], [156, 39, 176], [103, 58, 183], [100, 30, 60],
@@ -51,7 +49,7 @@ class Detection(Process):
     
     def __init__(self, input, cfg=None):
         super().__init__(group=None, target=None, name=None, args=(), kwargs={}, daemon=True)
-        self.input_size = INPUT_SIZE
+        self.input_size = 0
         self.input = input
         self.cfg = cfg
         self.q_out = Queue(maxsize=3)
@@ -80,6 +78,7 @@ class ONNXDetection(Detection):
 
     def __init__(self, input, cfg):
         super().__init__(input, cfg)
+        self.input_size = 550
         self.onnx_postprocess = "utils/postprocess_550x550.onnx"
         self.session = onnxruntime.InferenceSession(self.onnx_postprocess, None)
         self.threshold = 0.1
@@ -126,10 +125,12 @@ class ONNXDetection(Detection):
             masks.append(cropped)
         return bboxes, scores, class_ids, masks
 
+
 class RKNNDetection(Detection):
 
     def __init__(self, input, cfg):
         super().__init__(input, cfg)
+        self.input_size = 544
         self.anchors = []
         fpn_fm_shape = [math.ceil(self.input_size / stride) for stride in (8, 16, 32, 64, 128)]
         for i, size in enumerate(fpn_fm_shape):
@@ -153,12 +154,9 @@ class RKNNDetection(Detection):
         return after_nms_numpy(*results, self.input_size, self.input_size, self.cfg)
 
 
-
 class PostProcess():
     
     def __init__(self, queue, cfg:None, onnx:True):
-        
-        self.img_h = INPUT_SIZE
         if onnx:
             self.detection = ONNXDetection(queue, cfg)
         else:
@@ -202,8 +200,7 @@ def np_softmax(x):
 class Visualizer():
     
     def __init__(self, onnx=True):
-        self.onnx = onnx
-        if self.onnx:
+        if onnx:
             self.draw = Visualizer.onnx_draw
         else:
             self.draw = Visualizer.rknn_draw

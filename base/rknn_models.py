@@ -63,11 +63,11 @@ class Inference(Process):
             self.q_out.put((frame, self._rknnlite.inference(inputs=[frame])))
 
 
-class Yolact():
+class Net():
     """
     """
     
-    def __init__(self, cores, q_input):
-        self._model_name = get_model_names(['YOLACT'])
+    def __init__(self, model_name, cores, q_input):
+        self._model_name = get_model_names([model_name])
         self._rknnlite = RKNNModelLoader.load_weights(cores, self._model_name)
         self.inference = Inference(q_input, self._rknnlite)

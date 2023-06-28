@@ -4,6 +4,8 @@ from utils import PostProcess, Visualizer
 from base import Camera, RK3588
 
 
+POST_ONNX = False
+
 postprocess_cfg = {'weight':'weights/best_30.5_res101_coco_392000.pth',
                     'image': 'test_544.jpg',
                     'video' : None,
@@ -40,15 +42,15 @@ def main(source):
     """
     queue_size = 5
     q_pre = Queue(maxsize=queue_size)
-    q_post = Queue(maxsize=queue_size)
-    model = 'YOLACT' # 'YOLACT_EDGE'
+    model = 'YOLACT_minimal' #'YOLACT', 'YOLACT_EDGE'
     camera = Camera(source=source,
-                    queue=q_pre)
-    device = RK3588(camera)
+                    queue=q_pre,
+                    onnx=POST_ONNX)
+    device = RK3588(model, camera)
     post_processes = PostProcess(queue=device._neuro.net.inference.q_out,
                                  cfg=postprocess_cfg,
-                                 onnx=False) #q_post)
-    visualizer = Visualizer(onnx=False)
+                                 onnx=POST_ONNX)
+    visualizer = Visualizer(onnx=POST_ONNX)
     try:
         run(device, visualizer, post_processes)
     except Exception as e:

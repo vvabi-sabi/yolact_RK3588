@@ -7,8 +7,10 @@ from utils import INPUT_SIZE
 class Camera(Process):
     """
     """
-    def __init__(self, source: int, queue):
+    def __init__(self, source: int, queue, onnx=True):
         super().__init__(group=None, target=None, name=None, args=(), kwargs={}, daemon=True)
+        INPUT_SIZE = (550 if onnx else 544)
+        self.net_size = (INPUT_SIZE, INPUT_SIZE) 
         self._queue = queue
         self.source = source
 
@@ -33,8 +35,7 @@ class Camera(Process):
         return next(self.frames)
     
     def run(self):
-        net_size = (INPUT_SIZE, INPUT_SIZE) #(544, 544)
         for raw_frame in self.frames:
             #frame = cv2.cvtColor(raw_frame, cv2.COLOR_BGR2RGB)
-            frame = cv2.resize(raw_frame.copy(), net_size)
+            frame = cv2.resize(raw_frame.copy(), self.net_size)
             self._queue.put((frame))
