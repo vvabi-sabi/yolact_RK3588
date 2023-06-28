@@ -1,8 +1,6 @@
 import cv2
 from multiprocessing import Process
 
-from utils import INPUT_SIZE
-
 
 class Camera(Process):
     """
