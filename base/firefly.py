@@ -29,5 +29,5 @@ class RK3588():
     def __init__(self, model_name, camera):
         self._camera = camera
         self._neuro = NeuroModule(model_name,
-                                  self._CORES[3],
+                                  self._CORES[5],
                                   self._camera._queue)

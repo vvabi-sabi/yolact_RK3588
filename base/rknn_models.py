@@ -27,12 +27,11 @@ class RKNNModelLoader():
     def __init__(self):
         self.verbose = False
         self.verbose_file = 'verbose.txt'
-        self.async_mode = False
     
     @staticmethod
     def load_weights(core, model):
         model = get_model_path(model)
-        rknnlite = RKNNLite()
+        rknnlite = RKNNLite(verbose=False)
         print(f"Export rknn model - {model}")
         ret = rknnlite.load_rknn(model)
         if ret != 0:
