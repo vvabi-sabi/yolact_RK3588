@@ -277,6 +277,7 @@ class Visualizer():
         return img_fused
     
     def show_frame(self, frame, out):
+        frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
         frame = self.draw(frame, *out)
         cv2.imshow('Yolact Inference', frame)
         cv2.waitKey(1)

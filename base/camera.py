@@ -34,13 +34,17 @@ class Camera(Process):
         return next(self.frames)
     
     def resize_frame(self, frame, net_size):
-        frame = cv2.resize(frame.copy(), net_size)
-        return frame
+        frame_size = frame.shape[:2]
+        if any(map(lambda x,y: x < y, frame_size, net_size)):
+            return cv2.resize(frame, net_size, interpolation = cv2.INTER_CUBIC)
+        else:
+            return cv2.resize(frame, net_size, interpolation = cv2.INTER_AREA)
 
-    def crop_frame(elf, frame, net_size):
+    def crop_frame(self, frame, net_size):
         net_size = net_size[0]
         hc, wc = frame.shape[0]/2, frame.shape[1]/2
         h0, w0 = int(hc-net_size/2), int(wc-net_size/2)
+        assert (h0 >= 0 and w0 >= 0), 'The image size is not suitable to crop. Try Camera.resize_frame()'
         return frame[h0:(h0+net_size), w0:(w0+net_size)]
 
     def run(self):
