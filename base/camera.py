@@ -24,6 +24,7 @@ class Camera(Process):
                 if not ret:
                     print("Camera stopped!")
                     raise SystemExit
+                frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB) # not always necessary
                 yield frame
             cap.release()
         except Exception as e:
@@ -32,8 +33,17 @@ class Camera(Process):
     def get_frame(self):
         return next(self.frames)
     
+    def resize_frame(self, frame, net_size):
+        frame = cv2.resize(frame.copy(), net_size)
+        return frame
+
+    def crop_frame(elf, frame, net_size):
+        hc, wc = frame.shape[0]/2, frame.shape[1]/2
+        h0, w0 = int(hc-net_size/2), int(wc-net_size/2)
+        return frame[h0:(h0+net_size), w0:(w0+net_size)]
+
     def run(self):
         for raw_frame in self.frames:
-            #frame = cv2.cvtColor(raw_frame, cv2.COLOR_BGR2RGB)
-            frame = cv2.resize(raw_frame.copy(), self.net_size)
+            #frame = self.resize_frame(raw_frame, self.net_size) #cv2.resize(raw_frame.copy(), self.net_size)
+            frame = self.crop_frame(raw_frame, self.net_size)
             self._queue.put((frame))
