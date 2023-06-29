@@ -38,6 +38,7 @@ class Camera(Process):
         return frame
 
     def crop_frame(elf, frame, net_size):
+        net_size = net_size[0]
         hc, wc = frame.shape[0]/2, frame.shape[1]/2
         h0, w0 = int(hc-net_size/2), int(wc-net_size/2)
         return frame[h0:(h0+net_size), w0:(w0+net_size)]
