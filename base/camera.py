@@ -52,6 +52,6 @@ class Camera(Process):
         for raw_frame in self.frames:
             #frame = self.resize_frame(raw_frame, self.net_size) #cv2.resize(raw_frame.copy(), self.net_size)
             frame = self.crop_frame(raw_frame, self.net_size)
-            if self._queue.qsize() >=2:
-                self._queue.get()
+            if not self._queue.empty():
+                continue
             self._queue.put((frame))
