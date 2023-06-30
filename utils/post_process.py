@@ -206,13 +206,9 @@ class Visualizer():
             self.draw = Visualizer.rknn_draw
 
     @staticmethod
-    def onnx_draw(frame, elapsed_time, bboxes, scores, class_ids, masks):
+    def onnx_draw(frame, bboxes, scores, class_ids, masks):
         colors = get_colors(len(COCO_CLASSES))
         frame_height, frame_width = frame.shape[0], frame.shape[1]
-        cv2.putText(frame,
-                    "Elapsed Time : " + '{:.1f}'.format(elapsed_time * 1000) + "ms",
-                    (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 1, cv2.LINE_AA)
-
         # Draw
         if len(masks) > 0:
             mask_image = np.zeros(MASK_SHAPE, dtype=np.uint8)
