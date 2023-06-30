@@ -15,6 +15,7 @@ class Camera(Process):
     @property
     def frames(self):
         cap = cv2.VideoCapture(self.source)
+        #cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
         if(not cap.isOpened()):
             print("Bad source")
             raise SystemExit
@@ -51,4 +52,6 @@ class Camera(Process):
         for raw_frame in self.frames:
             #frame = self.resize_frame(raw_frame, self.net_size) #cv2.resize(raw_frame.copy(), self.net_size)
             frame = self.crop_frame(raw_frame, self.net_size)
+            if self._queue.qsize() >=2:
+                self._queue.get()
             self._queue.put((frame))
