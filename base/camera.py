@@ -72,7 +72,6 @@ class Camera(Process):
         -----
         frame : np.ndarray
             The next frame from the video source.
-        
         """
         cap = cv2.VideoCapture(self.source)
         #cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
