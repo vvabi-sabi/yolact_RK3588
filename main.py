@@ -4,8 +4,6 @@ from utils import PostProcess, Visualizer
 from base import Camera, RK3588
 
 
-POST_ONNX = False
-
 postprocess_cfg = {'weight':'weights/best_30.5_res101_coco_392000.pth',
                     'image': 'test_544.jpg',
                     'video' : None,
@@ -40,6 +38,7 @@ def run(device, visualizer, post_process):
 def main(source):
     """
     """
+    POST_ONNX = False
     queue_size = 5
     q_pre = Queue(maxsize=queue_size)
     model = 'YOLACT_minimal' #'YOLACT', 'YOLACT_EDGE'
