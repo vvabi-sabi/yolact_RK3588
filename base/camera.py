@@ -63,15 +63,16 @@ class Camera(Process):
         self : Camera
             The instance of the Camera class.
         
-        Returns
-        -------
-        frame : np.ndarray
-            The next frame from the video source.
+        Raises
+        ------
+        SystemExit
+            If the video source does not open or if the frame cannot be read.
         
         Yield
         -----
-        SystemExit
-            If the video source does not open or if the frame cannot be read.
+        frame : np.ndarray
+            The next frame from the video source.
+        
         """
         cap = cv2.VideoCapture(self.source)
         #cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
