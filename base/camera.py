@@ -50,7 +50,14 @@ class Camera(Process):
 
     @property
     def frames(self):
-        """
+        """The generator performs the following steps:
+        There is creates a VideoCapture object using the video source specified in the Camera instance. 
+        Then it enters a while loop that continues as long as the VideoCapture object is open. 
+        Inside the loop, it reads the next frame from the VideoCapture object using the read() method. 
+        It converts the color space of the frame from BGR to RGB. This step may not always be necessary 
+        depending on the specific use neural network. Finally yields the frame, making it available 
+        for further processing outside the function.
+        
         Parameters
         ----------
         self : Camera
