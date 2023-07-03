@@ -68,8 +68,8 @@ class Camera(Process):
         frame : np.ndarray
             The next frame from the video source.
         
-        Raises
-        ------
+        Yield
+        -----
         SystemExit
             If the video source does not open or if the frame cannot be read.
         """
