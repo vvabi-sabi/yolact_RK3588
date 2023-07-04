@@ -72,7 +72,6 @@ def nms_numpy(class_pred, box_pred, coef_pred, proto_out, anchors, cfg):
     if class_thre.shape[1] == 0:
         return None, None, None, None, None
     else:
-        assert not cfg['traditional_nms'], 'Traditional nms is not supported with numpy.'
         box_thre, coef_thre, class_ids, class_thre = fast_nms_numpy(box_thre, coef_thre, class_thre, cfg)
         return class_ids, class_thre, box_thre, coef_thre, proto_p
 
@@ -121,12 +120,8 @@ def after_nms_numpy(ids_p, class_p, box_p, coef_p, proto_p, img_h, img_w, cfg=No
         box_p = box_p[keep]
         coef_p = coef_p[keep]
 
-    assert not cfg['save_lincomb'], 'save_lincomb is not supported in onnx mode.'
-
     masks = np_sigmoid(np.matmul(proto_p, coef_p.T))
-
-    if not cfg or not cfg['no_crop']:  # Crop masks by box_p
-        masks = crop_numpy(masks, box_p)
+    masks = crop_numpy(masks, box_p)
 
     ori_size = max(img_h, img_w)
     masks = cv2.resize(masks, (ori_size, ori_size), interpolation=cv2.INTER_LINEAR)

@@ -4,18 +4,8 @@ from utils import PostProcess, Visualizer
 from base import Camera, RK3588
 
 
-postprocess_cfg = {'weight':'weights/best_30.5_res101_coco_392000.pth',
-                    'image': 'test_544.jpg',
-                    'video' : None,
+rknn_postprocess_cfg = {'weight':'weights/best_30.5_res101_coco_392000.pth',
                     'img_size' : 544,
-                    'traditional_nms' : False,
-                    'hide_mask' : False,
-                    'hide_bbox' : False,
-                    'hide_score' : False,
-                    'cutout' : False,
-                    'save_lincomb' : False,
-                    'no_crop' : False,
-                    'real_time' : False,
                     'scales' : [24, 48, 96, 192, 384],
                     'aspect_ratios': [1, 0.5, 2],
                     'top_k' : 200,
@@ -47,7 +37,7 @@ def main(source):
                     onnx=POST_ONNX)
     device = RK3588(model, camera)
     post_processes = PostProcess(queue=device._neuro.net.inference.q_out,
-                                 cfg=postprocess_cfg,
+                                 cfg=rknn_postprocess_cfg,
                                  onnx=POST_ONNX)
     visualizer = Visualizer(onnx=POST_ONNX)
     try:
