@@ -280,7 +280,7 @@ class PostProcess():
         queue : Queue
             An instance of the "Queue" class with a maximum size of 3, used to store processed frames 
             and prepared results for display.
-        cfg :dict
+        cfg : dict
             Configuration settings for the detection process. May include parameters such as 
             confidence thresholds, maximum number of output predictions, etc. Default is None.
         onnx : bool
@@ -336,6 +336,27 @@ class Visualizer():
 
     @staticmethod
     def onnx_draw(frame, bboxes, scores, class_ids, masks):
+        """
+        Draw bounding boxes, scores, and masks on a given frame.
+
+        Parameters
+        ----------
+        frame : np.ndarray
+            The frame on which to draw.
+        bboxes : List[List[float]]
+            List of bounding boxes.
+        scores : List[float]
+            List of scores.
+        class_ids : List[int]
+            List of class IDs.
+        masks List[np.ndarray]
+            List of masks.
+
+        Returns
+        -------
+        frame : np.ndarray
+            The frame with bounding boxes, scores, and masks drawn on it.
+        """
         colors = get_colors(len(COCO_CLASSES))
         frame_height, frame_width = frame.shape[0], frame.shape[1]
         # Draw
@@ -359,6 +380,31 @@ class Visualizer():
     
     @staticmethod
     def rknn_draw(img_origin, ids_p, class_p, box_p, mask_p, cfg=None, fps=None):
+        """
+        Generates an image with bounding boxes and labels for detected objects.
+
+        Parameters
+        ----------
+        img_origin : numpy.ndarray
+            The original image.
+        ids_p : numpy.ndarray
+            The array of object IDs.
+        class_p : numpy.ndarray
+            The array of object classes.
+        box_p : numpy.ndarray
+            The array of bounding boxes.
+        mask_p : numpy.ndarray
+            The array of object masks.
+        cfg : dict, optional
+            The configuration object (default: None).
+        fps : float, optional
+            The frames per second (default: None).
+
+        Returns
+        -------
+        frame : numpy.ndarray
+            The image with bounding boxes and labels.
+        """
         real_time = False
         hide_score = False
         if ids_p is None:
@@ -390,18 +436,28 @@ class Visualizer():
             cv2.rectangle(img_fused, (x1, y1), (x1 + text_w, y1 + text_h + 5), color, -1)
             cv2.putText(img_fused, text_str, (x1, y1 + 15), font, scale, (255, 255, 255), thickness, cv2.LINE_AA)
 
-        # if real_time:
-        #     fps_str = f'fps: {fps:.2f}'
-        #     text_w, text_h = cv2.getTextSize(fps_str, font, scale, thickness)[0]
-        #     # Create a shadow to show the fps more clearly
-        #     img_fused = img_fused.astype(np.float32)
-        #     img_fused[0:text_h + 8, 0:text_w + 8] *= 0.6
-        #     img_fused = img_fused.astype(np.uint8)
-        #     cv2.putText(img_fused, fps_str, (0, text_h + 2), font, scale, (255, 255, 255), thickness, cv2.LINE_AA)
+        if real_time:
+            fps_str = f'fps: {fps:.2f}'
+            text_w, text_h = cv2.getTextSize(fps_str, font, scale, thickness)[0]
+            # Create a shadow to show the fps more clearly
+            img_fused = img_fused.astype(np.float32)
+            img_fused[0:text_h + 8, 0:text_w + 8] *= 0.6
+            img_fused = img_fused.astype(np.uint8)
+            cv2.putText(img_fused, fps_str, (0, text_h + 2), font, scale, (255, 255, 255), thickness, cv2.LINE_AA)
 
         return img_fused
     
     def show_frame(self, frame, out):
+        """
+        Show the given frame on the screen with the specified output.
+
+        Parameters:
+            frame (numpy.ndarray): The frame to be displayed.
+            out (tuple): The output of the function.
+
+        Returns:
+            None
+        """
         frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
         frame = self.draw(frame, *out)
         cv2.imshow('Yolact Inference', frame)
