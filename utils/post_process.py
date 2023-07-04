@@ -57,11 +57,11 @@ class Detection(Process):
     def run(self):
         while True:
             frame, inputs = self.input.get()
-            inputs = self.adapt(inputs)
+            inputs = self.permute(inputs)
             results = self.detect(inputs)
             self.q_out.put((frame, self.prep_display(results)))
     
-    def adapt(self, net_outputs):
+    def permute(self, net_outputs):
         '''implementation dependent'''
         pass
 
@@ -83,7 +83,7 @@ class ONNXDetection(Detection):
         self.session = onnxruntime.InferenceSession(self.onnx_postprocess, None)
         self.threshold = 0.1
     
-    def adapt(self, net_outputs):
+    def permute(self, net_outputs):
         onnx_inputs = [net_outputs[0][0], net_outputs[2][0], net_outputs[3], net_outputs[1][0]]
         onnx_inputs[0] = np.transpose(onnx_inputs[0], (2,0,1))
         onnx_inputs[1] = np.transpose(onnx_inputs[1], (2,0,1))
@@ -136,7 +136,7 @@ class RKNNDetection(Detection):
         for i, size in enumerate(fpn_fm_shape):
             self.anchors += make_anchors(self.cfg, size, size, self.cfg['scales'][i])
     
-    def adapt(self, net_outputs):
+    def permute(self, net_outputs):
         class_p, box_p, coef_p, proto_p = net_outputs
         class_p = class_p[0]
         box_p = box_p[0]
