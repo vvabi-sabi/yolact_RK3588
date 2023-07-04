@@ -92,10 +92,6 @@ class Camera(Process):
     
     def get_frame(self):
         """It yields the frame, making it available for further processing outside the function.
-        
-        Returns
-        -------
-        next(frames) : np.ndarray
         """
         return next(self.frames)
     
@@ -147,14 +143,6 @@ class Camera(Process):
     def run(self):
         '''When processing a raw frame, there are two methods to choose from:
         resize_frame or crop_frame.
-        
-        Parameters
-        ----------
-        self : Camera
-        
-        Returns
-        -------
-        None
         '''
         for raw_frame in self.frames:
             #frame = self.resize_frame(raw_frame, self.net_size) #cv2.resize(raw_frame.copy(), self.net_size)
