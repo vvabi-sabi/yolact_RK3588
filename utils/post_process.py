@@ -207,7 +207,7 @@ class RKNNDetection(Detection):
 
     Methods
     -------
-    init(input, cfg)
+    __init__(input, cfg)
         Initializes the RKNNDetection algorithm by setting the input size and generating the anchor boxes.
     permute(net_outputs)
         Permutes the arrays in net_outputs to have a specific shape.
