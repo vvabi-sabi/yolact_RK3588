@@ -84,7 +84,7 @@ class Camera(Process):
                 if not ret:
                     print("Camera stopped!")
                     raise SystemExit
-                frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB) # not always necessary
+                frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
                 yield frame
             cap.release()
         except Exception as e:

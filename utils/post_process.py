@@ -46,6 +46,35 @@ COCO_CLASSES = ('person', 'bicycle', 'car', 'motorcycle', 'airplane', 'bus',
 
 
 class Detection(Process):
+    """
+    Attributes
+    ----------
+    input_size : int
+        Represents the size of the input frame.
+    input : Queue
+        The queue of input frames for the detection process.
+    cfg : dict
+        The configuration settings for the rknn-detection process. It include parameters such as 
+        confidence thresholds, maximum number of output predictions, etc. (see main.py)
+    q_out : Queue
+        An instance of the "Queue" class with a maximum size of 3. It is used to store the 
+        processed frames and prepared results for display.
+    
+    Methods
+    -------
+    permute(net_outputs)
+        Permutes the elements in the net_outputs list according to a specific order.
+    detect(inputs)
+        Detect is the final layer of SSD. Decode location preds, apply non-maximum suppression 
+        to location predictions based on conf scores and threshold to a top_k number of output 
+        predictions for both confidence score and locations, as the predicted masks.
+    prep_display(results)
+        This method prepares the results for display. It extracts data from the inference results
+        in the form: class_ids, scores, bboxes, masks
+    run(None)
+        Method runs in an infinite loop. It puts the frame and prepared results into the "q_out" queue.
+    
+    """
     
     def __init__(self, input, cfg=None):
         super().__init__(group=None, target=None, name=None, args=(), kwargs={}, daemon=True)
@@ -75,15 +104,48 @@ class Detection(Process):
 
 
 class ONNXDetection(Detection):
+    """This class is a subclass of the Detection class and implements ONNX-based object detection.
+    
+    Attributes
+    ----------
+    input_size : int
+        The size of the input frame.
+    onnx_postprocess : str
+        Path to onnx model
+    session : onnxruntime.InferenceSession
+        Constructs an InferenceSession from a model data (in byte array).
+    threshold : int
+        Detections with a score under this threshold will not be considered.
+
+    Methods
+    -------
+    __init__(input, cfg)
+        Initializes the ONNXDetection algorithm by creating an InferenceSession
+    permute(net_outputs)
+        Transposes the arrays in onnx_inputs to have a specific shape and returns 
+        the permuted and transposed onnx_inputs.
+    detect(onnx_inputs)
+        Runs the ONNX session with the given onnx_inputs and returns the outputs of the session.
+    prep_display(results)
+        Extracts bounding box, score, and class ID from each result. Applies a threshold 
+        to filter out low scores.
+    
+    """
 
     def __init__(self, input, cfg):
         super().__init__(input, cfg)
         self.input_size = 550
         self.onnx_postprocess = "utils/postprocess_550x550.onnx"
-        self.session = onnxruntime.InferenceSession(self.onnx_postprocess, None)
+        self.session = onnxruntime.InferenceSession(self.onnx_postprocess,
+                                                    None) # providers=OrtSessionOptionsAppendExecutionProvider_RKNPU
         self.threshold = 0.1
     
     def permute(self, net_outputs):
+        '''
+        Returns
+        -------
+        post_loc, post_score, post_proto, post_masks
+        '''
         onnx_inputs = [net_outputs[0][0], net_outputs[2][0], net_outputs[3], net_outputs[1][0]]
         onnx_inputs[0] = np.transpose(onnx_inputs[0], (2,0,1))
         onnx_inputs[1] = np.transpose(onnx_inputs[1], (2,0,1))
@@ -91,11 +153,16 @@ class ONNXDetection(Detection):
         return onnx_inputs
     
     def detect(self, onnx_inputs):
-        outputs = self.session.run(None, {self.session.get_inputs()[0].name: onnx_inputs[0],
+        '''
+        Returns
+        -------
+        x1y1x2y2_score_class, final_masks
+        '''
+        results = self.session.run(None, {self.session.get_inputs()[0].name: onnx_inputs[0],
                                           self.session.get_inputs()[1].name: onnx_inputs[1],
                                           self.session.get_inputs()[2].name: onnx_inputs[2],
                                           self.session.get_inputs()[3].name: onnx_inputs[3]})
-        return outputs
+        return results
     
     def prep_display(self, results):
         # Pre process: Creates 4-dimensional blob from image
@@ -127,6 +194,29 @@ class ONNXDetection(Detection):
 
 
 class RKNNDetection(Detection):
+    """This class represents an implementation of the RKNNDetection algorithm, which is a subclass of the 
+    Detection class. It includes methods for initializing the algorithm, permuting the network outputs, 
+    performing object detection, and preparing the results for display.
+    
+    Attributes
+    ----------
+    input_size : int
+        The size of the input frame.
+    anchors : list
+        A list of anchor boxes used for object detection.
+
+    Methods
+    -------
+    init(input, cfg)
+        Initializes the RKNNDetection algorithm by setting the input size and generating the anchor boxes.
+    permute(net_outputs)
+        Permutes the arrays in net_outputs to have a specific shape.
+    detect(onnx_inputs)
+        Performs object detection by applying non-maximum suppression.
+    prep_display(results)
+        Prepares the results for display.
+    
+    """
 
     def __init__(self, input, cfg):
         super().__init__(input, cfg)
@@ -137,6 +227,11 @@ class RKNNDetection(Detection):
             self.anchors += make_anchors(self.cfg, size, size, self.cfg['scales'][i])
     
     def permute(self, net_outputs):
+        '''
+        Returns
+        -------
+        class_p, box_p, coef_p, proto_p
+        '''
         class_p, box_p, coef_p, proto_p = net_outputs
         class_p = class_p[0]
         box_p = box_p[0]
@@ -146,17 +241,51 @@ class RKNNDetection(Detection):
     
     def detect(self, inputs):
         '''
-        nms_numpy return class_ids, class_thre, box_thre, coef_thre, proto_p
+        Returns
+        -------
+        class_ids, class_thre, box_thre, coef_thre, proto_p
         '''
         return nms_numpy(*inputs, anchors=self.anchors, cfg=self.cfg)
     
     def prep_display(self, results):
+        '''
+        Returns
+        -------
+        ids_p, class_p, box_p, masks
+        '''
         return after_nms_numpy(*results, self.input_size, self.input_size, self.cfg)
 
 
 class PostProcess():
+    """Class to handle post-processing of yolact inference results.
+
+    Attributes
+    ----------
+    detection : Detection
+        Detection class object.
+
+    Methods
+    -------
+    run()
+        Starts the detection process.
+    get_outputs()
+        Retrieves the prepared results from the detection process.
+        
+    """
     
     def __init__(self, queue, cfg:None, onnx:True):
+        """
+        Parameters
+        ----------
+        queue : Queue
+            An instance of the "Queue" class with a maximum size of 3, used to store processed frames 
+            and prepared results for display.
+        cfg :dict
+            Configuration settings for the detection process. May include parameters such as 
+            confidence thresholds, maximum number of output predictions, etc. Default is None.
+        onnx : bool
+            Flag indicating whether to use ONNXDetection or RKNNDetection. Default is True.
+        """
         if onnx:
             self.detection = ONNXDetection(queue, cfg)
         else:
