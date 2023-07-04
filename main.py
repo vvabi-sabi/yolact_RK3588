@@ -4,15 +4,14 @@ from utils import PostProcess, Visualizer
 from base import Camera, RK3588
 
 
-rknn_postprocess_cfg = {'weight':'weights/best_30.5_res101_coco_392000.pth',
-                    'img_size' : 544,
-                    'scales' : [24, 48, 96, 192, 384],
-                    'aspect_ratios': [1, 0.5, 2],
-                    'top_k' : 200,
-                    'max_detections' : 100,
-                    'nms_score_thre' : 0.5,
-                    'nms_iou_thre' : 0.5,
-                    'visual_thre' : 0.3,
+rknn_postprocess_cfg = {'img_size' : 544,
+                        'scales' : [24, 48, 96, 192, 384],
+                        'aspect_ratios': [1, 0.5, 2],
+                        'top_k' : 200,
+                        'max_detections' : 100,
+                        'nms_score_thre' : 0.5,
+                        'nms_iou_thre' : 0.5,
+                        'visual_thre' : 0.3,
                     }
 
 
