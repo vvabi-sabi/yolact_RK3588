@@ -146,7 +146,7 @@ class RKNNDetection(Detection):
     
     def detect(self, inputs):
         '''
-        nms_numpy retern class_ids, class_thre, box_thre, coef_thre, proto_p
+        nms_numpy return class_ids, class_thre, box_thre, coef_thre, proto_p
         '''
         return nms_numpy(*inputs, anchors=self.anchors, cfg=self.cfg)
     
