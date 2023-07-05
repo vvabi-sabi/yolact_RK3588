@@ -44,6 +44,7 @@ COCO_CLASSES = ('person', 'bicycle', 'car', 'motorcycle', 'airplane', 'bus',
                 'toaster', 'sink', 'refrigerator', 'book', 'clock', 'vase',
                 'scissors', 'teddy bear', 'hair drier', 'toothbrush')
 
+CASTOM_CLASSES = ('first', 'backgrnd')
 
 class Detection(Process):
     """
@@ -382,7 +383,7 @@ class Visualizer():
         img_fused = img_origin
         masks_semantic = mask_p * (ids_p[:, None, None] + 1)  # expand ids_p' shape for broadcasting
         # The color of the overlap area is different because of the '%' operation.
-        masks_semantic = masks_semantic.astype('int').sum(axis=0) % (len(COCO_CLASSES) - 1)
+        masks_semantic = masks_semantic.astype('int').sum(axis=0) % (len(COCO_CLASSES))
         color_masks = COLORS[masks_semantic].astype('uint8')
         img_fused = cv2.addWeighted(color_masks, 0.4, img_origin, 0.6, gamma=0)
 
