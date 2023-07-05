@@ -430,7 +430,7 @@ def draw_box(frame, box, color, class_id, score):
     font = cv2.FONT_HERSHEY_DUPLEX
 
     x1, y1, x2, y2 = box
-    class_name = COCO_CLASSES[class_id[i]]
+    class_name = COCO_CLASSES[class_id]
     
     cv2.rectangle(frame, (x1, y1), (x2, y2), color, thickness)
     text_str = f'{class_name}: {score:.2f}' if not hide_score else class_name
@@ -438,6 +438,7 @@ def draw_box(frame, box, color, class_id, score):
     cv2.rectangle(frame, (x1, y1), (x1 + text_w, y1 + text_h + 5), color, -1)
     cv2.putText(frame, text_str, (x1, y1 + 15), font, scale,
                 (255, 255, 255), thickness, cv2.LINE_AA)
+    return frame
 
 def get_colors(num):
     colors = [[0, 0, 0]]

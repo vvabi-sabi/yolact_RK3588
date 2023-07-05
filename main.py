@@ -30,7 +30,7 @@ def main(source):
     POST_ONNX = False
     queue_size = 5
     q_pre = Queue(maxsize=queue_size)
-    model = 'YOLACT_minimal' #'YOLACT', 'YOLACT_EDGE'
+    model = ('YOLACT' if POST_ONNX else 'YOLACT_minimal')
     camera = Camera(source=source,
                     queue=q_pre,
                     onnx=POST_ONNX)
