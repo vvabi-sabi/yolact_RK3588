@@ -339,19 +339,6 @@ class Visualizer():
         """
         Draw bounding boxes, scores, and masks on a given frame.
 
-        Parameters
-        ----------
-        frame : np.ndarray
-            The frame on which to draw.
-        bboxes : List[List[float]]
-            List of bounding boxes.
-        scores : List[float]
-            List of scores.
-        class_ids : List[int]
-            List of class IDs.
-        masks List[np.ndarray]
-            List of masks.
-
         Returns
         -------
         frame : np.ndarray
@@ -369,13 +356,11 @@ class Visualizer():
             mask_image = cv2.resize(mask_image, (frame_width, frame_height), cv2.INTER_NEAREST)
             cv2.addWeighted(frame, 0.5, mask_image, 0.5, 0.0, frame)
 
-        for bbox, score, class_id, mask in zip(bboxes, scores, class_ids, masks):
+        for bbox, score, class_id in zip(bboxes, scores, class_ids):
             x1, y1 = int(bbox[0] * frame_width), int(bbox[1] * frame_height)
             x2, y2 = int(bbox[2] * frame_width), int(bbox[3] * frame_height)
-
-            cv2.rectangle(frame, (x1, y1), (x2, y2), (255, 255, 0), 2)
-            cv2.putText(frame, '%s:%.2f' % (COCO_CLASSES[class_id], score),
-                    (x1, y1 - 5), 0, 0.7, (0, 255, 0), 2)
+            color = colors[class_id+1]
+            frame = draw_box(frame, (x1, y1, x2, y2), color, class_id, score)
         return frame
     
     @staticmethod
@@ -383,30 +368,12 @@ class Visualizer():
         """
         Generates an image with bounding boxes and labels for detected objects.
 
-        Parameters
-        ----------
-        img_origin : numpy.ndarray
-            The original image.
-        ids_p : numpy.ndarray
-            The array of object IDs.
-        class_p : numpy.ndarray
-            The array of object classes.
-        box_p : numpy.ndarray
-            The array of bounding boxes.
-        mask_p : numpy.ndarray
-            The array of object masks.
-        cfg : dict, optional
-            The configuration object (default: None).
-        fps : float, optional
-            The frames per second (default: None).
-
         Returns
         -------
         frame : numpy.ndarray
             The image with bounding boxes and labels.
         """
         real_time = False
-        hide_score = False
         if ids_p is None:
             return img_origin
 
@@ -424,17 +391,9 @@ class Visualizer():
         font = cv2.FONT_HERSHEY_DUPLEX
 
         for i in reversed(range(num_detected)):
-            x1, y1, x2, y2 = box_p[i, :]
-
             color = COLORS[ids_p[i] + 1].tolist()
-            cv2.rectangle(img_fused, (x1, y1), (x2, y2), color, thickness)
-
-            class_name = COCO_CLASSES[ids_p[i]]
-            text_str = f'{class_name}: {class_p[i]:.2f}' if not hide_score else class_name
-
-            text_w, text_h = cv2.getTextSize(text_str, font, scale, thickness)[0]
-            cv2.rectangle(img_fused, (x1, y1), (x1 + text_w, y1 + text_h + 5), color, -1)
-            cv2.putText(img_fused, text_str, (x1, y1 + 15), font, scale, (255, 255, 255), thickness, cv2.LINE_AA)
+            
+            img_fused = draw_box(img_fused, box_p[i, :], color, ids_p[i], class_p[i])
 
         if real_time:
             fps_str = f'fps: {fps:.2f}'
@@ -463,6 +422,22 @@ class Visualizer():
         cv2.imshow('Yolact Inference', frame)
         cv2.waitKey(1)
 
+
+def draw_box(frame, box, color, class_id, score):
+    hide_score = False
+    scale = 0.6
+    thickness = 1
+    font = cv2.FONT_HERSHEY_DUPLEX
+
+    x1, y1, x2, y2 = box
+    class_name = COCO_CLASSES[class_id[i]]
+    
+    cv2.rectangle(frame, (x1, y1), (x2, y2), color, thickness)
+    text_str = f'{class_name}: {score:.2f}' if not hide_score else class_name
+    text_w, text_h = cv2.getTextSize(text_str, font, scale, thickness)[0]
+    cv2.rectangle(frame, (x1, y1), (x1 + text_w, y1 + text_h + 5), color, -1)
+    cv2.putText(frame, text_str, (x1, y1 + 15), font, scale,
+                (255, 255, 255), thickness, cv2.LINE_AA)
 
 def get_colors(num):
     colors = [[0, 0, 0]]
