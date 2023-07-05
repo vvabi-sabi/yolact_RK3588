@@ -410,12 +410,16 @@ class Visualizer():
         """
         Show the given frame on the screen with the specified output.
 
-        Parameters:
-            frame (numpy.ndarray): The frame to be displayed.
-            out (tuple): The output of the function.
+        Parameters
+        ----------
+        frame ; numpy.ndarray
+            The frame to be displayed.
+        out : tuple
+            The output of the function.
 
-        Returns:
-            None
+        Returns
+        -------
+        None
         """
         frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
         frame = self.draw(frame, *out)
