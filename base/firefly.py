@@ -4,20 +4,18 @@ from .rknn_models import Net
 
 
 class NeuroModule():
-    
+
     _PROCESSES_NUMBER = 3
 
     def __init__(self, model_name, cores_list, q_input):
         self.net = Net(model_name, cores_list, q_input)
 
     def run_inference(self):
-        inf_process = self.net.inference
-        inf_process.start()
+        self.net.inference.start()
 
 
 class RK3588():
-    """
-    """
+
     _CORES = [RKNNLite.NPU_CORE_0,
               RKNNLite.NPU_CORE_1,
               RKNNLite.NPU_CORE_2,

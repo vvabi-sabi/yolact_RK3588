@@ -166,31 +166,31 @@ class ONNXDetection(Detection):
         return results
     
     def prep_display(self, results):
-        # Pre process: Creates 4-dimensional blob from image
         def crop(bbox, shape):
-            x1 = int(max(bbox[0] * shape[1], 0))
-            y1 = int(max(bbox[1] * shape[0], 0))
-            x2 = int(max(bbox[2] * shape[1], 0))
-            y2 = int(max(bbox[3] * shape[0], 0))
+            x1 = max(int(bbox[0] * shape[1]), 0)
+            y1 = max(int(bbox[1] * shape[0]), 0)
+            x2 = max(int(bbox[2] * shape[1]), 0)
+            y2 = max(int(bbox[3] * shape[0]), 0)
             return (slice(y1, y2), slice(x1, x2))
-        # Post process
+        
         bboxes, scores, class_ids, masks = [], [], [], []
+        
         for result, mask in zip(results[0][0], results[1]):
             bbox = result[:4].tolist()
             score = result[4]
             class_id = int(result[5])
-            if self.threshold > score:
-                continue
-            # Add 1 to class_id to distinguish it from the background 0
-            mask = np.where(mask > 0.5, class_id + 1, 0).astype(np.uint8)
-            region = crop(bbox, mask.shape)
-            cropped = np.zeros(mask.shape, dtype=np.uint8)
-            cropped[region] = mask[region]
+            
+            if self.threshold <= score:
+                mask = np.where(mask > 0.5, class_id + 1, 0).astype(np.uint8)
+                region = crop(bbox, mask.shape)
+                cropped = np.zeros(mask.shape, dtype=np.uint8)
+                cropped[region] = mask[region]
 
-            bboxes.append(bbox)
-            class_ids.append(class_id)
-            scores.append(score)
-            masks.append(cropped)
+                bboxes.append(bbox)
+                class_ids.append(class_id)
+                scores.append(score)
+                masks.append(cropped)
+        
         return bboxes, scores, class_ids, masks
 
 
@@ -293,8 +293,7 @@ class PostProcess():
             self.detection = RKNNDetection(queue, cfg)
     
     def run(self):
-        detection = self.detection
-        detection.start()
+        self.detection.start()
     
     def get_outputs(self):
         return self.detection.q_out.get()
@@ -309,11 +308,11 @@ def make_anchors(cfg, conv_h, conv_w, scale):
         y = (j + 0.5) / conv_h
 
         for ar in cfg['aspect_ratios']:
-            ar = sqrt(ar)
-            w = scale * ar / cfg['img_size']
-            h = scale / ar / cfg['img_size']
+            ar_sqrt = sqrt(ar)
+            w = scale * ar_sqrt / cfg['img_size']
+            h = scale / ar_sqrt / cfg['img_size']
 
-            prior_data += [x, y, w, h]
+            prior_data.extend([x, y, w, h])
 
     return prior_data
 
@@ -347,7 +346,7 @@ class Visualizer():
         """
         colors = get_colors(len(COCO_CLASSES))
         frame_height, frame_width = frame.shape[0], frame.shape[1]
-        # Draw
+        # Draw masks
         if len(masks) > 0:
             mask_image = np.zeros(MASK_SHAPE, dtype=np.uint8)
             for mask in masks:
@@ -357,10 +356,11 @@ class Visualizer():
             mask_image = cv2.resize(mask_image, (frame_width, frame_height), cv2.INTER_NEAREST)
             cv2.addWeighted(frame, 0.5, mask_image, 0.5, 0.0, frame)
 
+        # Draw boxes
         for bbox, score, class_id in zip(bboxes, scores, class_ids):
             x1, y1 = int(bbox[0] * frame_width), int(bbox[1] * frame_height)
             x2, y2 = int(bbox[2] * frame_width), int(bbox[3] * frame_height)
-            color = colors[class_id+1]
+            color = colors[class_id + 1]
             frame = draw_box(frame, (x1, y1, x2, y2), color, class_id, score)
         return frame
     
@@ -372,7 +372,7 @@ class Visualizer():
         Returns
         -------
         frame : numpy.ndarray
-            The image with bounding boxes and labels.
+            The image with bounding boxes, masks and labels.
         """
         real_time = False
         if ids_p is None:
@@ -410,17 +410,6 @@ class Visualizer():
     def show_frame(self, frame, out):
         """
         Show the given frame on the screen with the specified output.
-
-        Parameters
-        ----------
-        frame ; numpy.ndarray
-            The frame to be displayed.
-        out : tuple
-            The output of the function.
-
-        Returns
-        -------
-        None
         """
         frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
         frame = self.draw(frame, *out)

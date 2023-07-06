@@ -50,45 +50,21 @@ class Camera(Process):
 
     @property
     def frames(self):
-        """The generator performs the following steps:
-        There is creates a VideoCapture object using the video source specified in the Camera instance. 
-        Then it enters a while loop that continues as long as the VideoCapture object is open. 
-        Inside the loop, it reads the next frame from the VideoCapture object using the read() method. 
-        It converts the color space of the frame from BGR to RGB. This step may not always be necessary 
-        depending on the specific use neural network. Finally yields the frame, making it available 
-        for further processing outside the function.
-        
-        Parameters
-        ----------
-        self : Camera
-            The instance of the Camera class.
-        
-        Raises
-        ------
-        SystemExit
-            If the video source does not open or if the frame cannot be read.
-        
-        Yield
-        -----
-        frame : np.ndarray
-            The next frame from the video source.
-        """
         cap = cv2.VideoCapture(self.source)
-        #cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
-        if(not cap.isOpened()):
-            print("Bad source")
-            raise SystemExit
+        if not cap.isOpened():
+            raise SystemExit("Bad source")
+        
         try:
             while cap.isOpened():
                 ret, frame = cap.read()
                 if not ret:
-                    print("Camera stopped!")
-                    raise SystemExit
+                    raise SystemExit("Camera stopped!")
                 frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
                 yield frame
-            cap.release()
         except Exception as e:
             print(f"Stop recording loop. Exception {e}")
+        finally:
+            cap.release()
     
     def get_frame(self):
         """It yields the frame, making it available for further processing outside the function.
@@ -96,49 +72,16 @@ class Camera(Process):
         return next(self.frames)
     
     def resize_frame(self, frame, net_size):
-        '''This function resizes a frame to a specified size.
-        
-        Parameters
-        ----------
-        frame : np.ndarray
-            The input frame to be resized.
-        net_size : tuple
-            The desired size of the output frame.
-        
-        Returns
-        -------
-        resized_frame : np.ndarray
-            The resized frame.
-        '''
         frame_size = frame.shape[:2]
-        if any(map(lambda x,y: x < y, frame_size, net_size)):
-            return cv2.resize(frame, net_size, interpolation = cv2.INTER_CUBIC)
-        else:
-            return cv2.resize(frame, net_size, interpolation = cv2.INTER_AREA)
+        interpolation = cv2.INTER_CUBIC if any(x < y for x, y in zip(frame_size, net_size)) else cv2.INTER_AREA
+        return cv2.resize(frame, net_size, interpolation=interpolation)
 
     def crop_frame(self, frame, net_size):
-        '''This function crops a frame to a specified size.
-        
-        It calculates the top-left coordinates of the crop area by subtracting half of the desired size 
-        from the center coordinates of the frame.
-        
-        Parameters
-        ----------
-        frame : np.ndarray
-            The input frame to be cropped.
-        net_size : tuple
-            The desired size of the output frame.
-        
-        Returns
-        -------
-        cropped_frame : np.ndarray
-            The cropped frame.
-        '''
         net_size = net_size[0]
-        hc, wc = frame.shape[0]/2, frame.shape[1]/2
-        h0, w0 = int(hc-net_size/2), int(wc-net_size/2)
+        hc, wc = frame.shape[0] // 2, frame.shape[1] // 2
+        h0, w0 = hc - (net_size // 2), wc - (net_size // 2)
         assert (h0 >= 0 and w0 >= 0), 'The image size is not suitable to crop. Try Camera.resize_frame()'
-        return frame[h0:(h0+net_size), w0:(w0+net_size)]
+        return frame[h0:h0+net_size, w0:w0+net_size]
 
     def run(self):
         '''When processing a raw frame, there are two methods to choose from:

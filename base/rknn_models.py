@@ -21,8 +21,6 @@ def get_model_path(model_names):
 
 
 class RKNNModelLoader():
-    """
-    """
     
     def __init__(self):
         self.verbose = False
@@ -59,12 +57,11 @@ class Inference(Process):
     def run(self):
         while True:
             frame = self.input.get()
-            self.q_out.put((frame, self._rknnlite.inference(inputs=[frame])))
+            inference_result = self._rknnlite.inference(inputs=[frame])
+            self.q_out.put((frame, inference_result))
 
 
 class Net():
-    """
-    """
     
     def __init__(self, model_name, cores, q_input):
         self._model_name = get_model_names([model_name])
