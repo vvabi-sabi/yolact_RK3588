@@ -1,3 +1,4 @@
+import os
 import cv2
 from multiprocessing import Process
 
@@ -93,3 +94,15 @@ class Camera(Process):
             if (not self._queue.empty() and type(self.source) == int):
                 continue
             self._queue.put((frame))
+
+class DataLoader(Camera):
+
+    @property
+    def frames(self):
+        try:
+            for frame_path in os.listdir(self.source):
+                frame = cv2.imread(self.source+frame_path)
+                frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                yield frame
+        except Exception as e:
+            print(f"Stop recording loop. Exception {e}")
