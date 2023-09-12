@@ -137,3 +137,17 @@ def after_nms_numpy(ids_p, class_p, box_p, coef_p, proto_p, img_h, img_w, cfg=No
     box_p = box_p.astype('int32')
 
     return ids_p, class_p, box_p, masks
+
+
+def mask_iou(mask1, mask2):
+    """
+    Inputs inputs are matricies of size _ x N. Output is size _1 x _2.
+    Note: if iscrowd is True, then mask2 should be the crowd.
+    """
+    intersection = torch.matmul(mask1, mask2.t())
+    area1 = torch.sum(mask1, dim=1).reshape(1, -1)
+    area2 = torch.sum(mask2, dim=1).reshape(1, -1)
+    union = (area1.t() + area2) - intersection
+    ret = intersection / union
+
+    return ret.cpu()

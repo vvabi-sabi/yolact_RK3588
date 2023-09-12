@@ -102,7 +102,8 @@ class DataLoader(Camera):
     coco = COCO('test/custom_ann.json')
     ids = list(coco.imgToAnns.keys())
     
-    def get_gt(self, index, height, width):
+    def get_gt(self, index):
+        width, height = self.net_size
         img_id = self.ids[index]
         ann_ids = self.coco.getAnnIds(imgIds=img_id)
         
@@ -125,17 +126,15 @@ class DataLoader(Camera):
             labels = np.array(label_list)
         boxes = boxes / np.array([width, height, width, height])  # to 0~1 scale
         boxes = np.hstack((boxes, np.expand_dims(labels, axis=1)))
-        return boxes, masks 
+        return boxes, masks, height, width #gt, gt_masks, height, width
 
     @property
     def frames(self):
         try:
-            for i, frame_path in enumerate(os.listdir(self.source)):
+            for frame_path in os.listdir(self.source):
                 frame = cv2.imread(self.source+frame_path)
                 frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-                height, width, _ = frame.shape
-                boxes, masks = self.get_gt(i, height, width)
-                yield frame, boxes, masks, height, width #gt, gt_masks, height, width
+                yield frame 
         except Exception as e:
             print(f"Stop recording loop. Exception {e}")
     

@@ -8,7 +8,7 @@ import onnxruntime
 from multiprocessing import Process, Queue
 
 from utils.box_utils import nms_numpy, after_nms_numpy
-
+from utils.metrics_utils import APDataObject, prep_metrics
 
 MASK_SHAPE = (138, 138, 3)
 
@@ -441,3 +441,13 @@ def get_colors(num):
         color = np.random.randint(0, 256, [3]).astype(np.uint8)
         colors.append(color.tolist())
     return colors
+
+iou_thres = [x / 100 for x in range(5, 50, 5)]
+def evaluate(outputs, gt, gt_masks, img_h, img_w):
+    ap_data = {'box': [[APDataObject() for _ in COCO_CLASSES] for _ in iou_thres],
+               'mask': [[APDataObject() for _ in COCO_CLASSES] for _ in iou_thres]}
+    
+    ids_p, class_p, boxes_p, masks_p = outputs
+    ap_obj = ap_data['box'][0][0]
+    prep_metrics(ap_data, ids_p, class_p, boxes_p, masks_p, gt, gt_masks, img_h, img_w, iou_thres)
+    accuracy, precision, recall = ap_obj.get_accuracy()
