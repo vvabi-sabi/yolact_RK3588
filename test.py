@@ -21,7 +21,7 @@ def run(device, visualizer, post_process):
     if post_process is not None:
         post_process.run()
         while True:
-            frame, outputs = post_process.get_outputs()
+            frame, outputs = post_process.get_outputs() # frame, ()
             visualizer.show_frame(frame, outputs)
 
 def main(images_folder):

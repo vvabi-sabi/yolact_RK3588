@@ -1,5 +1,7 @@
 import os
+import numpy as np
 import cv2
+from pycocotools.coco import COCO
 from multiprocessing import Process
 
 
@@ -96,13 +98,49 @@ class Camera(Process):
             self._queue.put((frame))
 
 class DataLoader(Camera):
+    
+    coco = COCO('test/custom_ann.json')
+    ids = list(coco.imgToAnns.keys())
+    
+    def get_gt(self, index, height, width):
+        img_id = self.ids[index]
+        ann_ids = self.coco.getAnnIds(imgIds=img_id)
+        
+        target = self.coco.loadAnns(ann_ids)
+        target = [aa for aa in target if not aa['iscrowd']]
+
+        box_list, mask_list, label_list = [], [], []
+        for aa in target:
+            bbox = aa['bbox']
+
+            x1y1x2y2_box = np.array([bbox[0], bbox[1], bbox[0] + bbox[2], bbox[1] + bbox[3]])
+            category = self.continuous_id[aa['category_id']] - 1
+
+            box_list.append(x1y1x2y2_box)
+            mask_list.append(self.coco.annToMask(aa))
+            label_list.append(category)
+        if len(box_list) > 0:
+            boxes = np.array(box_list)
+            masks = np.stack(mask_list, axis=0)
+            labels = np.array(label_list)
+        boxes = boxes / np.array([width, height, width, height])  # to 0~1 scale
+        boxes = np.hstack((boxes, np.expand_dims(labels, axis=1)))
+        return boxes, masks 
 
     @property
     def frames(self):
         try:
-            for frame_path in os.listdir(self.source):
+            for i, frame_path in enumerate(os.listdir(self.source)):
                 frame = cv2.imread(self.source+frame_path)
                 frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-                yield frame
+                height, width, _ = frame.shape
+                boxes, masks = self.get_gt(i, height, width)
+                yield frame, boxes, masks, height, width #gt, gt_masks, height, width
         except Exception as e:
             print(f"Stop recording loop. Exception {e}")
+    
+    def run(self):
+        for raw_frame in self.frames:
+            frame = raw_frame
+            #frame = self.crop_frame(raw_frame, self.net_size)
+            self._queue.put((frame))
