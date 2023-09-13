@@ -144,10 +144,10 @@ def mask_iou(mask1, mask2):
     Inputs inputs are matricies of size _ x N. Output is size _1 x _2.
     Note: if iscrowd is True, then mask2 should be the crowd.
     """
-    intersection = torch.matmul(mask1, mask2.t())
-    area1 = torch.sum(mask1, dim=1).reshape(1, -1)
-    area2 = torch.sum(mask2, dim=1).reshape(1, -1)
-    union = (area1.t() + area2) - intersection
+    intersection = np.matmul(mask1, mask2.T)
+    area1 = np.sum(mask1, axis=1).reshape(1, -1)
+    area2 = np.sum(mask2, axis=1).reshape(1, -1)
+    union = (area1.T + area2) - intersection
     ret = intersection / union
 
-    return ret.cpu()
+    return ret

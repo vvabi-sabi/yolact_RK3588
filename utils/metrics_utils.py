@@ -1,7 +1,7 @@
 import numpy as np
 
-from box_utils import box_iou_numpy as box_iou
-from box_utils import mask_iou
+from utils.box_utils import box_iou_numpy as box_iou
+from utils.box_utils import mask_iou
 
 
 class APDataObject:
@@ -107,13 +107,15 @@ def prep_metrics(ap_data, ids_p, classes_p, boxes_p, masks_p, gt, gt_masks, heig
     gt_boxes = gt[:, :4]
     gt_boxes[:, [0, 2]] *= width
     gt_boxes[:, [1, 3]] *= height
-    gt_classes = gt[:, 4].int().tolist()
+    gt_classes = list(gt[:, 4])
     gt_masks = gt_masks.reshape(-1, height * width)
     masks_p = masks_p.reshape(-1, height * width)
 
     mask_iou_cache = mask_iou(masks_p, gt_masks)
-    bbox_iou_cache = box_iou(boxes_p.float(), gt_boxes.float()).cpu()
+    bbox_iou_cache = box_iou(np.expand_dims(boxes_p, axis=0), np.expand_dims(gt_boxes, axis=0))
+    bbox_iou_cache = np.squeeze(bbox_iou_cache, axis=0)
 
+    ids_p = list(ids_p)
     for _class in set(ids_p + gt_classes):
         num_gt_per_class = gt_classes.count(_class)
 

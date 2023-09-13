@@ -191,7 +191,7 @@ class ONNXDetection(Detection):
                 scores.append(score)
                 masks.append(cropped)
         
-        return bboxes, scores, class_ids, masks
+        return class_ids, scores, bboxes, masks
 
 
 class RKNNDetection(Detection):
@@ -335,7 +335,7 @@ class Visualizer():
             self.draw = Visualizer.rknn_draw
 
     @staticmethod
-    def onnx_draw(frame, bboxes, scores, class_ids, masks):
+    def onnx_draw(frame, class_ids, scores, bboxes, masks):
         """
         Draw bounding boxes, scores, and masks on a given frame.
 
