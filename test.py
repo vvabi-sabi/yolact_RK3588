@@ -20,14 +20,12 @@ def run(device, visualizer, post_process):
     device._neuro.run_inference()
     if post_process is not None:
         post_process.run()
-        index = 0
         while True:
             frame, outputs = post_process.get_outputs() # frame, ()
-            gt, gt_masks, height, width = device._camera.get_gt(index)
+            gt, gt_masks, height, width = device._camera.get_gt()
             evaluate(outputs, gt, gt_masks, height, width)
             
             visualizer.show_frame(frame, outputs)
-            index += 1
 
 def main(images_folder):
     """

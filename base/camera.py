@@ -101,10 +101,11 @@ class DataLoader(Camera):
     
     coco = COCO('test/custom_ann.json')
     ids = list(coco.imgToAnns.keys())
+    index = 0
     
-    def get_gt(self, index):
+    def get_gt(self):
         width, height = self.net_size
-        img_id = self.ids[index]
+        img_id = self.ids[self.index]
         ann_ids = self.coco.getAnnIds(imgIds=img_id)
         
         target = self.coco.loadAnns(ann_ids)
@@ -135,6 +136,7 @@ class DataLoader(Camera):
                 frame = cv2.imread(self.source+frame_path)
                 frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
                 yield frame 
+                self.index += 1
         except Exception as e:
             print(f"Stop recording loop. Exception {e}")
     

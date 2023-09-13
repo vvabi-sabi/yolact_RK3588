@@ -451,3 +451,4 @@ def evaluate(outputs, gt, gt_masks, img_h, img_w):
     ap_obj = ap_data['box'][0][0]
     prep_metrics(ap_data, ids_p, class_p, boxes_p, masks_p, gt, gt_masks, img_h, img_w, iou_thres)
     accuracy, precision, recall = ap_obj.get_accuracy()
+    print(f"accuracy {accuracy}, precision {precision}, recall {recall}")
