@@ -22,7 +22,7 @@ def run(device, visualizer, post_process):
         post_process.run()
         while True:
             frame, outputs = post_process.get_outputs()
-            visualizer.show_frame(frame, outputs)
+            visualizer.show_results(frame, outputs)
 
 def main(source):
     """

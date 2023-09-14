@@ -25,7 +25,7 @@ def run(device, visualizer, post_process):
             gt, gt_masks, height, width = device._camera.get_gt()
             evaluate(outputs, gt, gt_masks, height, width)
             
-            visualizer.show_frame(frame, outputs)
+            visualizer.show_results(frame, outputs)
 
 def main(images_folder):
     """

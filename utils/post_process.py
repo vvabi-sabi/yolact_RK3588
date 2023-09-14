@@ -330,91 +330,102 @@ class Visualizer():
     
     def __init__(self, onnx=True):
         if onnx:
-            self.draw = Visualizer.onnx_draw
+            self.draw = onnx_draw
         else:
-            self.draw = Visualizer.rknn_draw
+            self.draw = rknn_draw
 
-    @staticmethod
-    def onnx_draw(frame, class_ids, scores, bboxes, masks):
-        """
-        Draw bounding boxes, scores, and masks on a given frame.
-
-        Returns
-        -------
-        frame : np.ndarray
-            The frame with bounding boxes, scores, and masks drawn on it.
-        """
-        colors = get_colors(len(COCO_CLASSES))
-        frame_height, frame_width = frame.shape[0], frame.shape[1]
-        # Draw masks
-        if len(masks) > 0:
-            mask_image = np.zeros(MASK_SHAPE, dtype=np.uint8)
-            for mask in masks:
-                color_mask = np.array(colors, dtype=np.uint8)[mask]
-                filled = np.nonzero(mask)
-                mask_image[filled] = color_mask[filled]
-            mask_image = cv2.resize(mask_image, (frame_width, frame_height), cv2.INTER_NEAREST)
-            cv2.addWeighted(frame, 0.5, mask_image, 0.5, 0.0, frame)
-
-        # Draw boxes
-        for bbox, score, class_id in zip(bboxes, scores, class_ids):
-            x1, y1 = int(bbox[0] * frame_width), int(bbox[1] * frame_height)
-            x2, y2 = int(bbox[2] * frame_width), int(bbox[3] * frame_height)
-            color = colors[class_id + 1]
-            frame = draw_box(frame, (x1, y1, x2, y2), color, class_id, score)
-        return frame
-    
-    @staticmethod
-    def rknn_draw(img_origin, ids_p, class_p, box_p, mask_p, cfg=None, fps=None):
-        """
-        Generates an image with bounding boxes and labels for detected objects.
-
-        Returns
-        -------
-        frame : numpy.ndarray
-            The image with bounding boxes, masks and labels.
-        """
-        real_time = False
-        if ids_p is None:
-            return img_origin
-
-        num_detected = ids_p.shape[0]
-
-        img_fused = img_origin
-        masks_semantic = mask_p * (ids_p[:, None, None] + 1)  # expand ids_p' shape for broadcasting
-        # The color of the overlap area is different because of the '%' operation.
-        masks_semantic = masks_semantic.astype('int').sum(axis=0) % (len(COCO_CLASSES))
-        color_masks = COLORS[masks_semantic].astype('uint8')
-        img_fused = cv2.addWeighted(color_masks, 0.4, img_origin, 0.6, gamma=0)
-
-        scale = 0.6
-        thickness = 1
-        font = cv2.FONT_HERSHEY_DUPLEX
-
-        for i in reversed(range(num_detected)):
-            color = COLORS[ids_p[i] + 1].tolist()
-            
-            img_fused = draw_box(img_fused, box_p[i, :], color, ids_p[i], class_p[i])
-
-        if real_time:
-            fps_str = f'fps: {fps:.2f}'
-            text_w, text_h = cv2.getTextSize(fps_str, font, scale, thickness)[0]
-            # Create a shadow to show the fps more clearly
-            img_fused = img_fused.astype(np.float32)
-            img_fused[0:text_h + 8, 0:text_w + 8] *= 0.6
-            img_fused = img_fused.astype(np.uint8)
-            cv2.putText(img_fused, fps_str, (0, text_h + 2), font, scale, (255, 255, 255), thickness, cv2.LINE_AA)
-
-        return img_fused
-    
-    def show_frame(self, frame, out):
+    def show_results(self, frame, out):
         """
         Show the given frame on the screen with the specified output.
         """
         frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
-        frame = self.draw(frame, *out)
+        frame, _ = self.draw(frame, *out)
         cv2.imshow('Yolact Inference', frame)
         cv2.waitKey(1)
+    
+    def show_evaluate(self, frame, out, *args):
+        """
+        Show the given frame on the screen with the specified output.
+        """
+        accuracy, precision, recall = args
+        frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
+        frame, mask = self.draw(frame, *out)
+        mask = add_eval(mask, accuracy, precision, recall)
+        cv2.imshow('Yolact Inference', frame)
+        cv2.imshow('Masks', mask)
+        cv2.waitKey(1)
+
+
+def onnx_draw(frame, class_ids, scores, bboxes, masks):
+    """
+    Draw bounding boxes, scores, and masks on a given frame.
+
+    Returns
+    -------
+    frame : np.ndarray
+        The frame with bounding boxes, scores, and masks drawn on it.
+    """
+    colors = get_colors(len(COCO_CLASSES))
+    frame_height, frame_width = frame.shape[0], frame.shape[1]
+    # Draw masks
+    if len(masks) > 0:
+        mask_image = np.zeros(MASK_SHAPE, dtype=np.uint8)
+        for mask in masks:
+            color_mask = np.array(colors, dtype=np.uint8)[mask]
+            filled = np.nonzero(mask)
+            mask_image[filled] = color_mask[filled]
+        mask_image = cv2.resize(mask_image, (frame_width, frame_height), cv2.INTER_NEAREST)
+        cv2.addWeighted(frame, 0.5, mask_image, 0.5, 0.0, frame)
+
+    # Draw boxes
+    for bbox, score, class_id in zip(bboxes, scores, class_ids):
+        x1, y1 = int(bbox[0] * frame_width), int(bbox[1] * frame_height)
+        x2, y2 = int(bbox[2] * frame_width), int(bbox[3] * frame_height)
+        color = colors[class_id + 1]
+        frame = draw_box(frame, (x1, y1, x2, y2), color, class_id, score)
+    return frame, mask_image
+
+
+def rknn_draw(img_origin, ids_p, class_p, box_p, mask_p, cfg=None, fps=None):
+    """
+    Generates an image with bounding boxes and labels for detected objects.
+
+    Returns
+    -------
+    frame : numpy.ndarray
+        The image with bounding boxes, masks and labels.
+    """
+    real_time = False
+    if ids_p is None:
+        return img_origin
+
+    num_detected = ids_p.shape[0]
+
+    img_fused = img_origin
+    masks_semantic = mask_p * (ids_p[:, None, None] + 1)  # expand ids_p' shape for broadcasting
+    # The color of the overlap area is different because of the '%' operation.
+    masks_semantic = masks_semantic.astype('int').sum(axis=0) % (len(COCO_CLASSES))
+    color_masks = COLORS[masks_semantic].astype('uint8')
+    img_fused = cv2.addWeighted(color_masks, 0.4, img_origin, 0.6, gamma=0)
+
+    scale = 0.6
+    thickness = 1
+    font = cv2.FONT_HERSHEY_DUPLEX
+
+    for i in reversed(range(num_detected)):
+        color = COLORS[ids_p[i] + 1].tolist()
+        img_fused = draw_box(img_fused, box_p[i, :], color, ids_p[i], class_p[i])
+
+    if real_time:
+        fps_str = f'fps: {fps:.2f}'
+        text_w, text_h = cv2.getTextSize(fps_str, font, scale, thickness)[0]
+        # Create a shadow to show the fps more clearly
+        img_fused = img_fused.astype(np.float32)
+        img_fused[0:text_h + 8, 0:text_w + 8] *= 0.6
+        img_fused = img_fused.astype(np.uint8)
+        cv2.putText(img_fused, fps_str, (0, text_h + 2), font, scale, (255, 255, 255), thickness, cv2.LINE_AA)
+
+    return img_fused, color_masks
 
 
 def draw_box(frame, box, color, class_id, score):
@@ -442,6 +453,7 @@ def get_colors(num):
         colors.append(color.tolist())
     return colors
 
+
 iou_thres = [x / 100 for x in range(5, 50, 5)]
 def evaluate(outputs, gt, gt_masks, img_h, img_w):
     ap_data = {'box': [[APDataObject() for _ in COCO_CLASSES] for _ in iou_thres],
@@ -451,4 +463,10 @@ def evaluate(outputs, gt, gt_masks, img_h, img_w):
     ap_obj = ap_data['box'][0][0]
     prep_metrics(ap_data, ids_p, class_p, boxes_p, masks_p, gt, gt_masks, img_h, img_w, iou_thres)
     accuracy, precision, recall = ap_obj.get_accuracy()
-    print(f"accuracy {accuracy}, precision {precision}, recall {recall}")
+    return accuracy, precision, recall
+
+def add_eval(frame, accuracy, precision, recall):
+    text_str = f"accuracy {accuracy} \nprecision {precision} \nrecall {recall}"
+    cv2.putText(frame, text_str, (15, 25), cv2.FONT_HERSHEY_DUPLEX, 1,
+                (255, 255, 255), 1, cv2.LINE_AA)
+    return frame
