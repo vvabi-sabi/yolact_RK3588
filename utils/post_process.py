@@ -350,7 +350,7 @@ class Visualizer():
         accuracy, precision, recall = args
         frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
         frame, mask = self.draw(frame, *out)
-        mask = add_eval(mask, accuracy, precision, recall)
+        mask = add_eval(mask, np.round(accuracy, 3), np.round(precision, 3), np.round(recall,3))
         cv2.imshow('Yolact Inference', frame)
         cv2.imshow('Masks', mask)
         cv2.waitKey(1)
@@ -466,7 +466,13 @@ def evaluate(outputs, gt, gt_masks, img_h, img_w):
     return accuracy, precision, recall
 
 def add_eval(frame, accuracy, precision, recall):
-    text_str = f"accuracy {accuracy} \nprecision {precision} \nrecall {recall}"
-    cv2.putText(frame, text_str, (15, 25), cv2.FONT_HERSHEY_DUPLEX, 1,
-                (255, 255, 255), 1, cv2.LINE_AA)
+    text_acc = f"accuracy {accuracy}"
+    text_pre = f"precision {precision}"
+    text_rec = f"recall {recall}"
+    cv2.putText(frame, text_acc, (15, 25), cv2.FONT_HERSHEY_DUPLEX, 0.6,
+                (255, 125, 255), 1, cv2.LINE_AA)
+    cv2.putText(frame, text_pre, (15, 50), cv2.FONT_HERSHEY_DUPLEX, 0.6,
+                (255, 125, 255), 1, cv2.LINE_AA)
+    cv2.putText(frame, text_rec, (15, 75), cv2.FONT_HERSHEY_DUPLEX, 0.6,
+                (255, 125, 255), 1, cv2.LINE_AA)
     return frame
