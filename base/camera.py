@@ -144,11 +144,13 @@ class DataLoader(Camera):
     @property
     def frames(self):
         try:
-            for frame_path in os.listdir(self.source):
+            for i in range(len(os.listdir(self.source))):
+                img_id = self.ids[self.index]
+                frame_path = self.coco.loadImgs(img_id)[0]['file_name']
                 frame = cv2.imread(self.source+frame_path)
                 frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                self.index = i
                 yield frame 
-                self.index += 1
         except Exception as e:
             print(f"Stop recording loop. Exception {e}")
     
