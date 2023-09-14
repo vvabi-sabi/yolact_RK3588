@@ -23,9 +23,8 @@ def run(device, visualizer, post_process):
         while True:
             frame, outputs = post_process.get_outputs() # frame, ()
             gt, gt_masks, height, width = device._camera.get_gt()
-            evaluate(outputs, gt, gt_masks, height, width)
-            
-            visualizer.show_results(frame, outputs)
+            accuracy, precision, recall =evaluate(outputs, gt, gt_masks, height, width)
+            visualizer.show_evaluate(frame, outputs, (accuracy, precision, recall))
 
 def main(images_folder):
     """
