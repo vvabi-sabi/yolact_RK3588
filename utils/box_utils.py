@@ -108,11 +108,13 @@ def after_nms_numpy(ids_p, class_p, box_p, coef_p, proto_p, img_h, img_w, cfg=No
         return 1 / (1 + np.exp(-x))
 
     if ids_p is None:
+        print("\nids_p is None")
         return None, None, None, None
 
     if cfg and cfg['visual_thre'] > 0:
         keep = class_p >= cfg['visual_thre']
         if not keep.any():
+            print("\nkeep.any() is False")
             return None, None, None, None
 
         ids_p = ids_p[keep]
