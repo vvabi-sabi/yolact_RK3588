@@ -428,6 +428,11 @@ def rknn_draw(img_origin, ids_p, class_p, box_p, mask_p, cfg=None, fps=None):
     return img_fused, color_masks
 
 
+def draw_gt(gt_masks):
+    masks_semantic = gt_masks.astype('int').sum(axis=0) % (len(COCO_CLASSES))
+    color_masks = COLORS[masks_semantic].astype('uint8')
+    return color_masks
+
 def draw_box(frame, box, color, class_id, score):
     hide_score = False
     scale = 0.6
@@ -455,7 +460,8 @@ def get_colors(num):
 
 
 iou_thres = [x / 100 for x in range(5, 50, 5)]
-def evaluate(outputs, gt, gt_masks, img_h, img_w):
+def evaluate(outputs, *args):
+    gt, gt_masks, height, width = args
     ap_data = {'box': [[APDataObject() for _ in COCO_CLASSES] for _ in iou_thres],
                'mask': [[APDataObject() for _ in COCO_CLASSES] for _ in iou_thres]}
     

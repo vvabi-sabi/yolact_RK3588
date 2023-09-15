@@ -22,8 +22,8 @@ def run(device, visualizer, post_process):
         post_process.run()
         while True:
             frame, outputs = post_process.get_outputs() # frame, ()
-            gt, gt_masks, height, width = device._camera.get_gt()
-            accuracy, precision, recall = evaluate(outputs, gt, gt_masks, height, width)
+            ground_truth = device._camera.get_gt() #gt, gt_masks, height, width
+            accuracy, precision, recall = evaluate(outputs, *ground_truth)
             visualizer.show_evaluate(frame, outputs, accuracy, precision, recall)
 
 def main(images_folder):
