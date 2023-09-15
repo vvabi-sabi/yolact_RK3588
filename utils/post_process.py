@@ -345,7 +345,7 @@ class Visualizer():
     
     def show_evaluate(self, frame, out, gt_mask, evaluate_results):
         """
-        Show the given frame on the screen with the masks and evaluate result.
+        Show the given frame on the screen with the masks and evaluate results.
         """
         accuracy, precision, recall = evaluate_results
         frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
