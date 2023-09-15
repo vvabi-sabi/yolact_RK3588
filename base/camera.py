@@ -33,7 +33,7 @@ class Camera(Process):
 
     """
 
-    def __init__(self, source: int, queue, onnx=True):
+    def __init__(self, source: int, queue, onnx=True, gt_queue=None):
         """
         Parameters
         ----------
@@ -49,6 +49,7 @@ class Camera(Process):
         INPUT_SIZE = (550 if onnx else 544)
         self.net_size = (INPUT_SIZE, INPUT_SIZE) 
         self._queue = queue
+        self._gt_queue = gt_queue
         self.source = source
 
     @property
@@ -113,11 +114,10 @@ class DataLoader(Camera):
     
     coco = COCO('test/custom_ann.json')
     ids = list(coco.imgToAnns.keys())
-    index = 0
     
-    def get_gt(self):
+    def load_gt(self, index):
         width, height = self.net_size
-        img_id = self.ids[self.index]
+        img_id = self.ids[index]
         ann_ids = self.coco.getAnnIds(imgIds=img_id)
         
         target = self.coco.loadAnns(ann_ids)
@@ -141,15 +141,19 @@ class DataLoader(Camera):
         boxes = np.hstack((boxes, np.expand_dims(labels, axis=1)))
         return boxes, masks, height, width #gt, gt_masks, height, width
 
+    def get_gt(self):
+        return self._gt_queue.get()
+
     @property
     def frames(self):
         try:
             for i in range(len(os.listdir(self.source))):
-                img_id = self.ids[self.index]
+                img_id = self.ids[i]
                 frame_path = self.coco.loadImgs(img_id)[0]['file_name']
                 frame = cv2.imread(self.source+frame_path)
                 frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-                self.index = i
+                ground_truth = self.load_gt(i)
+                self._gt_queue.put((ground_truth))
                 yield frame 
         except Exception as e:
             print(f"Stop recording loop. Exception {e}")

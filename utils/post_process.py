@@ -343,14 +343,14 @@ class Visualizer():
         cv2.imshow('Yolact Inference', frame)
         cv2.waitKey(1)
     
-    def show_evaluate(self, frame, out, *args):
+    def show_evaluate(self, frame, out, gt_mask, evaluate_results):
         """
         Show the given frame on the screen with the masks and evaluate result.
         """
-        accuracy, precision, recall = args
+        accuracy, precision, recall = evaluate_results
         frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
         frame, mask = self.draw(frame, *out)
-        mask = add_eval(mask, np.round(accuracy, 3), np.round(precision, 3), np.round(recall,3))
+        mask = add_eval_data(mask, np.round(accuracy, 3), np.round(precision, 3), np.round(recall,3))
         cv2.imshow('Yolact Inference', frame)
         cv2.imshow('Masks', mask)
         cv2.waitKey(1)
@@ -460,8 +460,8 @@ def get_colors(num):
 
 
 iou_thres = [x / 100 for x in range(5, 50, 5)]
-def evaluate(outputs, *args):
-    gt, gt_masks, height, width = args
+def evaluate(outputs, ground_truth):
+    gt, gt_masks, img_h, img_w = ground_truth
     ap_data = {'box': [[APDataObject() for _ in COCO_CLASSES] for _ in iou_thres],
                'mask': [[APDataObject() for _ in COCO_CLASSES] for _ in iou_thres]}
     
@@ -469,9 +469,10 @@ def evaluate(outputs, *args):
     ap_obj = ap_data['box'][0][0]
     prep_metrics(ap_data, ids_p, class_p, boxes_p, masks_p, gt, gt_masks, img_h, img_w, iou_thres)
     accuracy, precision, recall = ap_obj.get_accuracy()
-    return accuracy, precision, recall
+    gt_mask = draw_gt(gt_masks)
+    return gt_mask, (accuracy, precision, recall)
 
-def add_eval(frame, accuracy, precision, recall):
+def add_eval_data(frame, accuracy, precision, recall):
     text_acc = f"accuracy {accuracy}"
     text_pre = f"precision {precision}"
     text_rec = f"recall {recall}"

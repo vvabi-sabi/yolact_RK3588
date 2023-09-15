@@ -23,8 +23,8 @@ def run(device, visualizer, post_process):
         while True:
             frame, outputs = post_process.get_outputs() # frame, ()
             ground_truth = device._camera.get_gt() #gt, gt_masks, height, width
-            accuracy, precision, recall = evaluate(outputs, *ground_truth)
-            visualizer.show_evaluate(frame, outputs, accuracy, precision, recall)
+            gt_mask, evaluate_results = evaluate(outputs, ground_truth)
+            visualizer.show_evaluate(frame, outputs, gt_mask, evaluate_results)
 
 def main(images_folder):
     """
@@ -32,10 +32,12 @@ def main(images_folder):
     POST_ONNX = False
     queue_size = 5
     q_pre = Queue(maxsize=queue_size)
+    q_gt = Queue(maxsize=queue_size)
     model = ('YOLACT' if POST_ONNX else 'YOLACT_minimal')
     camera = DataLoader(source=images_folder,
                     queue=q_pre,
-                    onnx=POST_ONNX)
+                    onnx=POST_ONNX,
+                    gt_queue=q_gt)
     device = RK3588(model, camera)
     post_processes = PostProcess(queue=device._neuro.net.inference.q_out,
                                  cfg=rknn_postprocess_cfg,
