@@ -353,6 +353,7 @@ class Visualizer():
         mask = add_eval_data(mask, np.round(accuracy, 3), np.round(precision, 3), np.round(recall,3))
         cv2.imshow('Yolact Inference', frame)
         cv2.imshow('Masks', mask)
+        cv2.imshow('Ground Truth', gt_mask)
         cv2.waitKey(1)
 
 
