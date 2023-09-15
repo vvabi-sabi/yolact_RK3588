@@ -21,8 +21,8 @@ def run(device, visualizer, post_process):
     if post_process is not None:
         post_process.run()
         while True:
-            frame, outputs = post_process.get_outputs() # frame, ()
-            ground_truth = device._camera.get_gt() #gt, gt_masks, height, width
+            frame, outputs = post_process.get_outputs()
+            ground_truth = device._camera.get_gt()
             gt_mask, evaluate_results = evaluate(outputs, ground_truth)
             visualizer.show_evaluate(frame, outputs, gt_mask, evaluate_results)
 
