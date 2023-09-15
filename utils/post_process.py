@@ -350,10 +350,11 @@ class Visualizer():
         accuracy, precision, recall = evaluate_results
         frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
         frame, mask = self.draw(frame, *out)
+        mask = cv2.addWeighted(mask, 0.4, gt_mask, 0.6, gamma=0)
         mask = add_eval_data(mask, np.round(accuracy, 3), np.round(precision, 3), np.round(recall,3))
         cv2.imshow('Yolact Inference', frame)
         cv2.imshow('Masks', mask)
-        cv2.imshow('Ground Truth', gt_mask)
+        #cv2.imshow('Ground Truth', gt_mask)
         cv2.waitKey(1)
 
 
@@ -431,7 +432,9 @@ def rknn_draw(img_origin, ids_p, class_p, box_p, mask_p, cfg=None, fps=None):
 
 def draw_gt(gt_masks):
     masks_semantic = gt_masks.astype('int').sum(axis=0) % (len(COCO_CLASSES))
-    color_masks = COLORS[masks_semantic].astype('uint8')
+    colors = get_colors(len(COCO_CLASSES))
+    colors = np.array(colors, dtype=np.uint8)
+    color_masks = colors[masks_semantic].astype('uint8')
     return color_masks
 
 def draw_box(frame, box, color, class_id, score):
