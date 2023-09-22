@@ -23,6 +23,7 @@ def run(device, visualizer, post_process):
         while True:
             frame, outputs = post_process.get_outputs()
             visualizer.show_results(frame, outputs)
+            # gps_data = matcher.get_gps_data(frame, mask)
 
 def main(source):
     """
